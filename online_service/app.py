@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import quote
 
+import anyio
 import qrcode
 from fastapi import FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -837,7 +838,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except WebSocketDisconnect:
             pass
         finally:
-            await release(session, connection)
+            # Blindado: si la tarea se cancela al cerrar (apagado del servidor o
+            # TestClient), el anfitrion igual debe recibir la neutralizacion.
+            with anyio.CancelScope(shield=True):
+                await release(session, connection)
 
     return app
 
