@@ -1,0 +1,1659 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>MechaKatz Cockpit</title>
+<style>
+  :root{
+    --bg:#06010d;
+    --panel:#0e1322;
+    --panel2:#121d33;
+    --cyan:#00f0ff;
+    --pink:#ff2e88;
+    --yellow:#ffea00;
+    --green:#00ff7f;
+    --red:#ff5050;
+    --line:rgba(0,240,255,.2);
+    --theme-main:#00f0ff;
+    --theme-accent:#ffea00;
+    --theme-body:#233b52;
+    --theme-line:rgba(0,240,255,.24);
+    --theme-glow:rgba(0,240,255,.18);
+  }
+  *{
+    box-sizing:border-box;
+    /* Bloquea pinch-zoom y double-tap-zoom en iOS/Android */
+    touch-action:manipulation;
+    /* Bloquea menu de long-press (callout) en iOS */
+    -webkit-touch-callout:none;
+    /* Bloquea highlight azul al tocar */
+    -webkit-tap-highlight-color:transparent;
+    /* Bloquea seleccion de texto */
+    -webkit-user-select:none;
+    -ms-user-select:none;
+    user-select:none;
+  }
+  html,body{
+    margin:0;
+    width:100%;
+    height:100%;
+    min-height:100dvh;
+    overflow:hidden;
+    background:
+      radial-gradient(circle at top,rgba(255,46,136,.15),transparent 28%),
+      radial-gradient(circle at bottom left,rgba(0,240,255,.12),transparent 34%),
+      linear-gradient(180deg,#12031e 0%,var(--bg) 100%);
+    color:#dffcff;
+    font-family:Consolas,monospace;
+    touch-action:none;
+  }
+  body{
+    padding:max(6px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));
+    display:flex;
+    align-items:stretch;
+    justify-content:center;
+  }
+  .shell{
+    width:min(980px,100%);
+    height:100%;
+    min-height:0;
+    display:grid;
+    grid-template-columns:1.04fr .96fr;
+    grid-template-rows:auto auto minmax(0,1fr) auto;
+    grid-template-areas:
+      "top top"
+      "slots slots"
+      "dash controls"
+      "foot foot";
+    gap:6px;
+  }
+  .bar,
+  .panel,
+  .cluster,
+  .button{
+    border:1px solid var(--theme-line);
+    background:linear-gradient(180deg,var(--theme-body),rgba(7,12,22,.96));
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.04),0 0 22px var(--theme-glow);
+  }
+  .bar{
+    padding:8px 12px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    justify-content:space-between;
+  }
+  #topBar{grid-area:top}
+  #slotBar{grid-area:slots}
+  .title{
+    color:var(--theme-accent);
+    font-weight:700;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    font-size:13px;
+  }
+  .status{
+    padding:5px 8px;
+    border:1px solid currentColor;
+    color:var(--theme-main);
+    font-size:11px;
+    text-transform:uppercase;
+  }
+  .status.on{color:var(--green)}
+  .status.warn{color:var(--pink)}
+  .top-actions{
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:8px;
+  }
+  .view-switch{
+    display:flex;
+    align-items:center;
+    gap:2px;
+    padding:2px;
+    border:1px solid var(--theme-line);
+    background:rgba(0,0,0,.34);
+  }
+  .view-button,
+  .audio-toggle{
+    border:1px solid transparent;
+    background:transparent;
+    color:#b9dce8;
+    font:700 10px Consolas,monospace;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    cursor:pointer;
+  }
+  .view-button{
+    min-height:28px;
+    padding:5px 8px;
+  }
+  .view-button.active{
+    color:#03070b;
+    background:var(--theme-accent);
+    border-color:var(--theme-accent);
+  }
+  .view-button:disabled{
+    cursor:not-allowed;
+    opacity:.36;
+  }
+  .slots{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+  }
+  .slot{
+    padding:6px 8px;
+    border:1px solid var(--theme-line);
+    background:#091120;
+    color:var(--theme-main);
+    cursor:pointer;
+    font-size:12px;
+  }
+  .slot.active{
+    color:#000;
+    background:var(--theme-accent);
+    border-color:var(--theme-accent);
+  }
+  .slot.connected:not(.active)::before{content:'\25cf  ';color:var(--green)}
+  .slot.standby:not(.active)::before{content:'\25cf  ';color:var(--yellow)}
+  .slot.offline:not(.active)::before{content:'\25cf  ';color:#64788b}
+  .slot:disabled{cursor:default;opacity:.88}
+  .game-view{
+    grid-area:game;
+    display:none;
+    position:relative;
+    min-width:0;
+    min-height:0;
+    overflow:hidden;
+    border:1px solid var(--theme-line);
+    background:#010205;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.03),0 0 24px var(--theme-glow);
+  }
+  .game-video{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    background:#010205;
+    pointer-events:none;
+  }
+  .video-placeholder{
+    position:absolute;
+    inset:0;
+    display:grid;
+    place-items:center;
+    padding:20px;
+    color:#9ed7ff;
+    text-align:center;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    font-size:12px;
+    background:
+      radial-gradient(circle at center,rgba(0,240,255,.09),transparent 42%),
+      repeating-linear-gradient(0deg,transparent 0 14px,rgba(0,240,255,.025) 15px 16px);
+    pointer-events:none;
+  }
+  .game-view.video-live .video-placeholder{display:none}
+  .game-hud{
+    position:absolute;
+    z-index:1;
+    top:8px;
+    left:8px;
+    max-width:calc(100% - 130px);
+    padding:6px 8px;
+    border:1px solid rgba(0,240,255,.28);
+    background:rgba(1,5,10,.76);
+    color:#dffcff;
+    font-size:10px;
+    line-height:1.25;
+    pointer-events:none;
+  }
+  .audio-toggle{
+    position:absolute;
+    z-index:4;
+    top:8px;
+    right:8px;
+    min-height:32px;
+    padding:5px 8px;
+    border-color:rgba(255,255,255,.22);
+    background:rgba(1,5,10,.8);
+    pointer-events:auto;
+  }
+  .audio-toggle.active{color:#020806;background:var(--green);border-color:var(--green)}
+  .dash{
+    grid-area:dash;
+    display:grid;
+    grid-template-columns:1.04fr .96fr;
+    gap:8px;
+    min-height:0;
+  }
+  .panel{
+    padding:10px;
+    min-height:0;
+  }
+  .screen{
+    min-height:0;
+    display:grid;
+    grid-template-rows:auto auto 1fr auto;
+    gap:8px;
+    background:
+      linear-gradient(135deg,rgba(0,240,255,.08),transparent 44%),
+      linear-gradient(180deg,#09111d 0%,#04070d 100%);
+  }
+  .screen h2,
+  .systems h2{
+    margin:0;
+    color:var(--theme-main);
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    font-size:15px;
+  }
+  .readout{
+    padding:8px;
+    border:1px solid rgba(255,255,255,.08);
+    background:rgba(0,0,0,.34);
+  }
+  .message{
+    min-height:38px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    color:var(--yellow);
+    font-size:14px;
+    line-height:1.15;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+  }
+  .row{
+    display:grid;
+    grid-template-columns:58px 1fr 42px;
+    gap:6px;
+    align-items:center;
+    margin-top:6px;
+    font-size:11px;
+  }
+  .row:first-child{margin-top:0}
+  .meter{
+    height:8px;
+    border:1px solid rgba(255,255,255,.08);
+    background:#02050b;
+    overflow:hidden;
+  }
+  .fill{
+    height:100%;
+    width:0%;
+    background:var(--cyan);
+  }
+  .hp .fill{background:linear-gradient(90deg,var(--green),#76ff9d)}
+  .shield .fill{background:linear-gradient(90deg,var(--cyan),#7ef6ff)}
+  .special .fill{background:linear-gradient(90deg,var(--yellow),#ffbd3f)}
+  .flight .fill{background:linear-gradient(90deg,var(--pink),#ffea00)}
+  .repair .fill{background:linear-gradient(90deg,var(--yellow),var(--red))}
+  .systems{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    align-content:start;
+    gap:6px;
+  }
+  .systems h2{grid-column:1/-1}
+  .stat{
+    padding:8px;
+    border:1px solid rgba(255,255,255,.08);
+    background:rgba(0,0,0,.28);
+    font-size:11px;
+    line-height:1.2;
+    overflow:hidden;
+  }
+  .stat strong{
+    display:block;
+    color:var(--yellow);
+    margin-bottom:3px;
+    text-transform:uppercase;
+    font-size:11px;
+  }
+  .stat span{
+    display:block;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .controls{
+    grid-area:controls;
+    display:grid;
+    grid-template-columns:1fr;
+    grid-template-rows:1fr 1fr;
+    gap:6px;
+    min-height:0;
+  }
+  .cluster{
+    padding:10px;
+    display:grid;
+    gap:8px;
+    min-height:0;
+  }
+  .cluster h3{
+    margin:0;
+    color:var(--theme-main);
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+  }
+  .joystick-cluster{
+    grid-template-rows:auto 1fr auto;
+  }
+  .action-cluster{
+    grid-template-rows:auto 1fr;
+  }
+  .joystick-pad{
+    position:relative;
+    min-height:min(34vh,250px);
+    aspect-ratio:1/1;
+    border:1px solid var(--theme-line);
+    border-radius:22px;
+    overflow:hidden;
+    background:
+      radial-gradient(circle at center,rgba(0,240,255,.1),transparent 42%),
+      linear-gradient(180deg,rgba(0,0,0,.26),rgba(0,0,0,.52));
+  }
+  .joystick-base{
+    position:absolute;
+    inset:14% 14%;
+    border-radius:50%;
+    border:2px solid var(--theme-line);
+    box-shadow:inset 0 0 28px var(--theme-glow);
+  }
+  .joystick-base::before,
+  .joystick-base::after{
+    content:'';
+    position:absolute;
+    background:var(--theme-line);
+  }
+  .joystick-base::before{
+    left:50%;
+    top:10%;
+    bottom:10%;
+    width:1px;
+    transform:translateX(-50%);
+  }
+  .joystick-base::after{
+    top:50%;
+    left:10%;
+    right:10%;
+    height:1px;
+    transform:translateY(-50%);
+  }
+  .joystick-stick{
+    position:absolute;
+    left:50%;
+    top:50%;
+    width:34%;
+    aspect-ratio:1/1;
+    border-radius:50%;
+    border:2px solid rgba(255,255,255,.12);
+    background:
+      radial-gradient(circle at 35% 30%,rgba(255,255,255,.28),transparent 20%),
+      linear-gradient(180deg,var(--theme-main) 0%,var(--theme-body) 100%);
+    box-shadow:0 0 28px var(--theme-glow), inset 0 -8px 18px rgba(0,0,0,.28);
+    transform:translate(-50%,-50%);
+    transition:transform .04s linear, box-shadow .08s linear;
+  }
+  .joystick-pad.active .joystick-stick{
+    box-shadow:0 0 36px var(--theme-accent), inset 0 -8px 18px rgba(0,0,0,.28);
+  }
+  .joystick-labels{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    color:rgba(223,252,255,.44);
+    font-size:10px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+  }
+  .joystick-labels span{position:absolute}
+  .joystick-labels .top{top:10px;left:50%;transform:translateX(-50%)}
+  .joystick-labels .bottom{bottom:10px;left:50%;transform:translateX(-50%)}
+  .joystick-labels .left{left:10px;top:50%;transform:translateY(-50%)}
+  .joystick-labels .right{right:10px;top:50%;transform:translateY(-50%)}
+  .action-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-auto-rows:1fr;
+    gap:8px;
+    min-height:0;
+  }
+  .button{
+    min-height:140px;
+    padding:6px;
+    border-radius:14px;
+    color:#e7fbff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    font-weight:700;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    user-select:none;
+    font-size:18px;
+    line-height:1.1;
+  }
+  .button.wide{grid-column:1/-1}
+  .button[data-action="flight"]{border-color:rgba(255,46,136,.34)}
+  .button.attack{border-color:rgba(255,234,0,.3)}
+  .button.guard{border-color:rgba(0,240,255,.3)}
+  .button.system{border-color:rgba(0,255,127,.3)}
+  .button.active{
+    background:linear-gradient(180deg,rgba(255,234,0,.96),rgba(255,136,0,.9));
+    color:#000;
+    box-shadow:0 0 24px rgba(255,234,0,.28);
+  }
+  .button.system.active{
+    background:linear-gradient(180deg,rgba(0,255,127,.95),rgba(0,171,122,.92));
+  }
+  .button.guard.active{
+    background:linear-gradient(180deg,rgba(0,240,255,.95),rgba(0,135,255,.92));
+  }
+  .button.attack.active{
+    background:linear-gradient(180deg,rgba(255,46,136,.95),rgba(255,175,0,.92));
+  }
+  .button.blank{
+    background:transparent;
+    border-color:transparent;
+    box-shadow:none;
+  }
+  .note-mini{
+    color:#9ed7ff;
+    font-size:10px;
+    line-height:1.2;
+    opacity:.8;
+  }
+  .foot{
+    grid-area:foot;
+    padding:8px 10px;
+    color:#abd6ff;
+    font-size:11px;
+    line-height:1.25;
+  }
+  @media (max-width:620px){
+    .title{font-size:12px}
+    #stageTag{
+      max-width:40%;
+      text-align:right;
+      font-size:11px;
+      line-height:1.15;
+    }
+    .dash{grid-template-columns:1.05fr .95fr}
+    .button{min-height:min(16vw,72px)}
+    .joystick-pad{min-height:min(44vw,220px)}
+  }
+  @media (max-width:420px), (max-height:760px){
+    .shell{gap:6px}
+    .bar{padding:8px 10px}
+    .title{font-size:11px}
+    .status{font-size:10px;padding:4px 7px}
+    .slot{font-size:11px;padding:5px 7px}
+    .panel{padding:8px}
+    .screen h2,.systems h2{font-size:13px}
+    .readout{padding:6px}
+    .message{min-height:30px;font-size:12px}
+    .row{grid-template-columns:50px 1fr 36px;font-size:10px;gap:5px;margin-top:5px}
+    .meter{height:7px}
+    .stat{padding:6px;font-size:10px}
+    .stat strong{font-size:10px}
+    .cluster{padding:8px}
+    .cluster h3{font-size:11px}
+    .action-grid{gap:5px}
+    .joystick-pad{min-height:min(43vw,180px);border-radius:18px}
+    .joystick-stick{width:36%}
+    .button{min-height:min(15vw,62px);font-size:11px;border-radius:10px}
+    .foot{padding:6px 8px;font-size:10px;line-height:1.15}
+  }
+  @media (max-height:700px){
+    .systems .stat:last-child{display:none}
+    .foot{display:none}
+  }
+  @media (max-width:760px){
+    .shell{
+      width:100%;
+    }
+  }
+  @media (orientation:portrait){
+    .shell{
+      grid-template-columns:1fr;
+      grid-template-rows:auto auto auto auto auto;
+      grid-template-areas:
+        "top"
+        "slots"
+        "dash"
+        "controls"
+        "foot";
+      gap:6px;
+    }
+    .dash{grid-template-columns:1fr}
+    .controls{grid-template-columns:1.08fr .92fr;grid-template-rows:none}
+    .joystick-pad{min-height:min(42vw,220px)}
+  }
+  .shell.view-stream{
+    position:relative;
+    grid-template-columns:1fr;
+    grid-template-rows:auto auto minmax(0,1fr);
+    grid-template-areas:
+      "top"
+      "slots"
+      "game";
+  }
+  .shell.view-stream .game-view{display:block}
+  .shell.view-stream .dash,
+  .shell.view-stream .foot{display:none}
+  .shell.view-stream .controls{
+    grid-area:game;
+    z-index:2;
+    grid-template-columns:minmax(150px,1fr) minmax(116px,.7fr);
+    grid-template-rows:1fr;
+    align-items:end;
+    gap:clamp(8px,4vw,44px);
+    padding:clamp(8px,2vw,18px);
+    pointer-events:none;
+  }
+  .shell.view-stream .cluster{
+    align-self:end;
+    pointer-events:auto;
+    background:linear-gradient(180deg,rgba(14,19,34,.38),rgba(4,7,13,.72));
+    backdrop-filter:blur(2px);
+  }
+  .shell.view-stream .joystick-cluster{
+    justify-self:start;
+    width:min(42vw,300px);
+    grid-template-rows:auto 1fr;
+  }
+  .shell.view-stream .joystick-pad{
+    width:100%;
+    min-height:0;
+    aspect-ratio:1/1;
+  }
+  .shell.view-stream .joystick-cluster .note-mini,
+  .shell.view-stream .cluster h3{display:none}
+  .shell.view-stream .action-cluster{
+    justify-self:end;
+    width:min(32vw,230px);
+    min-height:min(45vh,310px);
+    grid-template-rows:1fr;
+  }
+  .shell.view-stream .action-grid{
+    grid-template-columns:1fr;
+    grid-template-rows:1.35fr .8fr;
+  }
+  .shell.view-stream .button{
+    min-height:72px;
+    background:linear-gradient(180deg,rgba(35,59,82,.86),rgba(7,12,22,.86));
+  }
+  @media (max-width:560px){
+    .top-actions{gap:5px}
+    .view-button{padding:4px 6px;font-size:9px}
+    .shell.view-stream .controls{gap:8px;padding:7px}
+    .shell.view-stream .joystick-cluster{width:min(45vw,220px)}
+    .shell.view-stream .action-cluster{width:min(34vw,170px);min-height:min(38vh,250px)}
+    .shell.view-stream .button{min-height:60px;font-size:12px}
+  }
+</style>
+</head>
+<body>
+  <div class="shell">
+    <div id="topBar" class="bar">
+      <div class="title">Mecha Cockpit Link</div>
+      <div class="top-actions">
+        <div class="view-switch" role="group" aria-label="Vista del controlador">
+          <button id="viewController" class="view-button active" type="button" data-view="controller">Estado</button>
+          <button id="viewStream" class="view-button" type="button" data-view="stream" disabled>Juego</button>
+        </div>
+        <div id="status" class="status warn" aria-live="polite">Offline</div>
+      </div>
+    </div>
+
+    <div id="slotBar" class="bar">
+      <div class="slots">
+        <button class="slot" data-slot="0">Pilot P1</button>
+        <button class="slot" data-slot="1">Pilot P2</button>
+        <button class="slot" data-slot="2">Pilot P3</button>
+        <button class="slot" data-slot="3">Pilot P4</button>
+      </div>
+      <div id="stageTag">Awaiting host</div>
+    </div>
+
+    <section id="gameView" class="game-view" aria-hidden="true">
+      <video id="gameVideo" class="game-video" autoplay playsinline muted></video>
+      <div id="videoPlaceholder" class="video-placeholder">Esperando video del anfitrion</div>
+      <div id="gameHud" class="game-hud">Sin telemetria</div>
+      <button id="audioToggle" class="audio-toggle" type="button" aria-pressed="false">Audio off</button>
+    </section>
+
+    <div class="dash">
+      <section class="panel screen">
+        <h2 id="pilotName">Pilot Link</h2>
+        <div class="readout">
+          <div class="row hp"><span>Hull</span><div class="meter"><div id="hpFill" class="fill"></div></div><span id="hpText">0/0</span></div>
+          <div class="row shield"><span>Shield</span><div class="meter"><div id="shieldFill" class="fill"></div></div><span id="shieldText">0/0</span></div>
+          <div class="row special"><span>Core</span><div class="meter"><div id="specialFill" class="fill"></div></div><span id="specialText">0/0</span></div>
+          <div class="row flight"><span>Boost</span><div class="meter"><div id="flightFill" class="fill"></div></div><span id="flightText">0%</span></div>
+          <div class="row repair"><span>Repair</span><div class="meter"><div id="repairFill" class="fill"></div></div><span id="repairText">OK</span></div>
+        </div>
+        <div id="message" class="message">Awaiting uplink</div>
+        <div class="readout" id="telemetry">No telemetry yet.</div>
+      </section>
+
+      <section class="panel systems">
+        <h2>Systems</h2>
+        <div class="stat"><strong>Boss</strong><span id="bossStatus">No target</span></div>
+        <div class="stat"><strong>Host</strong><span id="hostStatus">Waiting for MechaKatz VS Bake-Neko!</span></div>
+        <div class="stat"><strong>Warnings</strong><span id="warningStatus">No active alerts.</span></div>
+        <div class="stat"><strong>Slot URL</strong><span id="slotUrl">-</span></div>
+      </section>
+    </div>
+
+    <div id="controls" class="controls">
+      <section class="cluster joystick-cluster">
+        <h3>Vector / Lane</h3>
+        <div id="joystickPad" class="joystick-pad">
+          <div class="joystick-base"></div>
+          <div class="joystick-labels">
+            <span class="top">Up</span>
+            <span class="left">Left</span>
+            <span class="right">Right</span>
+            <span class="bottom">Down</span>
+          </div>
+          <div id="joystickStick" class="joystick-stick"></div>
+        </div>
+        <div class="note-mini">Palanca tactil para desplazarte libremente y acomodarte en la linea del beat'em up.</div>
+      </section>
+
+      <section class="cluster action-cluster">
+        <h3>Weapons / Systems</h3>
+        <div class="action-grid">
+          <button class="button attack" data-action="light">Strike</button>
+          <button class="button system" data-action="special">System</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="panel foot">
+      <div><strong>Strike</strong>: 3 golpes rapidos encadenan un crash en el 4to. Tambien revive al companero caido si estas a su lado.</div>
+      <div><strong>System</strong>: activa el especial cuando tu medidor esta lleno.</div>
+      <div>Mover la palanca hacia arriba = saltar. Doble tap arriba en el aire = vuelo (cuesta HP).</div>
+    </div>
+  </div>
+
+<script>
+'use strict';
+
+// ============================================================
+// ANTI-ZOOM / ANTI-GESTURE LAYER (iOS Safari + Android Chrome)
+// El bug que veias era: el navegador interpretaba toques rapidos
+// como "pinch" o "double-tap-to-zoom" y deformaba el viewport, lo
+// que rompia las posiciones absolutas del joystick y los botones.
+// Estos handlers cancelan todos los gestos antes de que el navegador
+// los procese.
+// ============================================================
+(function preventGestureZoom(){
+  // gestureend/start/change son eventos especificos de iOS Safari
+  ['gesturestart','gesturechange','gestureend'].forEach(eventName => {
+    document.addEventListener(eventName, e => e.preventDefault(), { passive:false });
+  });
+  // Double-tap zoom: bloquear si los dos taps caen en menos de 300ms
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', e => {
+    const now = Date.now();
+    if(now - lastTouchEnd <= 320){ e.preventDefault(); }
+    lastTouchEnd = now;
+  }, { passive:false });
+  // touchmove con multiples dedos = pinch zoom; cancelar
+  document.addEventListener('touchmove', e => {
+    if(e.touches && e.touches.length > 1) e.preventDefault();
+  }, { passive:false });
+  // Bloquear pinch en desktop (ctrl+wheel) por si alguien lo abre en laptop
+  document.addEventListener('wheel', e => {
+    if(e.ctrlKey) e.preventDefault();
+  }, { passive:false });
+  // Bloquear menu contextual (long-press en mobile)
+  document.addEventListener('contextmenu', e => e.preventDefault());
+  // Si el viewport llegara a deformarse (visualViewport.scale > 1), forzar reset
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', () => {
+      if(window.visualViewport.scale > 1.01){
+        // hint al navegador de que volvamos a 1.0 — no funciona en todos
+        // los browsers, pero ayuda en Android Chrome
+        window.scrollTo(0, 0);
+      }
+    });
+  }
+})();
+
+const MAX_PLAYERS = 4;
+const REMOTE_ACTIONS = ['up','down','left','right','light','heavy','shield','special','flight'];
+const CONTROLLER_ID_KEY = 'mechakatz_controller_id';
+const DEVICE_SECRET_KEY = 'mechakatz_device_secret_v1';
+const ONLINE_TICKET_KEY = 'mechakatz_online_ticket_v1';
+const ONLINE_VIEW_KEY = 'mechakatz_online_view_v1';
+const INPUT_REFRESH_MS = 1000;
+const params = new URLSearchParams(window.location.search);
+const onlineBootstrap = readOnlineBootstrap();
+const onlineMode = !!onlineBootstrap.ticket;
+let playerIdx = Math.min(MAX_PLAYERS - 1, Math.max(0, parseInt(params.get('player') || '0', 10) || 0));
+let ws = null;
+const buttonState = Object.fromEntries(REMOTE_ACTIONS.map(action => [action, false]));
+let snapshot = null;
+let joystickPointerId = null;
+let reconnectTimer = 0;
+let manualReconnect = false;
+let slotDenied = false;
+let fatalDisconnect = false;
+let reconnectAttempt = 0;
+let connectionReady = false;
+let playerConfirmed = !onlineMode;
+let clientSequence = 0;
+let inputFlushQueued = false;
+let lastInputSignature = '';
+let inputRefreshTimer = 0;
+let requestedView = onlineMode ? onlineBootstrap.view : 'controller';
+let viewMode = 'controller';
+let allowedViews = ['controller'];
+let rtcIceServers = [];
+let rtcPeer = null;
+let rtcNegotiationId = '';
+let pendingIceNegotiationId = '';
+let pendingIceCandidates = [];
+let rtcFailureTimer = 0;
+const controllerId = getOrCreateControllerId();
+const deviceSecret = onlineMode ? getOrCreateDeviceSecret() : '';
+
+const statusEl = document.getElementById('status');
+const stageTagEl = document.getElementById('stageTag');
+const pilotNameEl = document.getElementById('pilotName');
+const hpFill = document.getElementById('hpFill');
+const shieldFill = document.getElementById('shieldFill');
+const specialFill = document.getElementById('specialFill');
+const flightFill = document.getElementById('flightFill');
+const repairFill = document.getElementById('repairFill');
+const hpText = document.getElementById('hpText');
+const shieldText = document.getElementById('shieldText');
+const specialText = document.getElementById('specialText');
+const flightText = document.getElementById('flightText');
+const repairText = document.getElementById('repairText');
+const messageEl = document.getElementById('message');
+const telemetryEl = document.getElementById('telemetry');
+const bossStatusEl = document.getElementById('bossStatus');
+const hostStatusEl = document.getElementById('hostStatus');
+const warningStatusEl = document.getElementById('warningStatus');
+const slotUrlEl = document.getElementById('slotUrl');
+const slotButtons = [...document.querySelectorAll('.slot')];
+const actionButtons = [...document.querySelectorAll('.button[data-action]')];
+const joystickPad = document.getElementById('joystickPad');
+const joystickStick = document.getElementById('joystickStick');
+const shellEl = document.querySelector('.shell');
+const gameViewEl = document.getElementById('gameView');
+const gameVideoEl = document.getElementById('gameVideo');
+const videoPlaceholderEl = document.getElementById('videoPlaceholder');
+const gameHudEl = document.getElementById('gameHud');
+const audioToggleEl = document.getElementById('audioToggle');
+const viewControllerEl = document.getElementById('viewController');
+const viewStreamEl = document.getElementById('viewStream');
+
+function normalizeView(value){
+  return value === 'stream' ? 'stream' : 'controller';
+}
+
+function readOnlineBootstrap(){
+  const rawFragment = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : '';
+  const fragmentParams = new URLSearchParams(rawFragment);
+  const fragmentTicket = (fragmentParams.get('ticket') || '').trim();
+  let ticket = fragmentTicket;
+  let selectedView = normalizeView(fragmentParams.get('view'));
+  const explicitLanUrl = params.has('player') && !fragmentTicket;
+
+  try {
+    if(fragmentTicket){
+      window.sessionStorage.setItem(ONLINE_TICKET_KEY, fragmentTicket);
+      window.sessionStorage.setItem(ONLINE_VIEW_KEY, selectedView);
+    } else if(!explicitLanUrl){
+      ticket = (window.sessionStorage.getItem(ONLINE_TICKET_KEY) || '').trim();
+      selectedView = normalizeView(window.sessionStorage.getItem(ONLINE_VIEW_KEY));
+    }
+  } catch(error){
+    // sessionStorage puede estar deshabilitado; el ticket del fragmento
+    // sigue siendo valido durante esta carga.
+  }
+
+  if(rawFragment){
+    try {
+      window.history.replaceState(null, document.title, window.location.pathname + window.location.search);
+    } catch(error){}
+  }
+  return { ticket, view:selectedView };
+}
+
+function validProtocolPart(value){
+  return typeof value === 'string' &&
+    value.length >= 16 &&
+    value.length <= 4096 &&
+    /^[A-Za-z0-9._~-]+$/.test(value);
+}
+
+function randomDeviceSecret(){
+  if(!window.crypto || typeof window.crypto.getRandomValues !== 'function') return '';
+  const bytes = new Uint8Array(24);
+  window.crypto.getRandomValues(bytes);
+  let binary = '';
+  for(const value of bytes) binary += String.fromCharCode(value);
+  return window.btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function getOrCreateDeviceSecret(){
+  try {
+    const saved = window.localStorage.getItem(DEVICE_SECRET_KEY);
+    if(validProtocolPart(saved || '')) return saved;
+    const generated = randomDeviceSecret();
+    if(!generated) return '';
+    window.localStorage.setItem(DEVICE_SECRET_KEY, generated);
+    return generated;
+  } catch(error){
+    return randomDeviceSecret();
+  }
+}
+
+function getOrCreateControllerId(){
+  const fallback = `ctrl_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
+  try {
+    const saved = window.localStorage.getItem(CONTROLLER_ID_KEY);
+    if(saved) return saved;
+    window.localStorage.setItem(CONTROLLER_ID_KEY, fallback);
+    return fallback;
+  } catch(error){
+    return fallback;
+  }
+}
+
+function slotLabel(idx){
+  return `P${idx + 1}`;
+}
+function getRosterSlot(idx = playerIdx){
+  return snapshot && Array.isArray(snapshot.roster) ? snapshot.roster.find(entry => entry.slot === idx) || null : null;
+}
+function getPilotState(idx = playerIdx){
+  return snapshot && Array.isArray(snapshot.players) ? snapshot.players.find(player => player.pIdx === idx) || null : null;
+}
+function applyPilotTheme(source){
+  const root = document.documentElement.style;
+  const body = source && source.body ? source.body : '#233b52';
+  const accent = source && source.accent ? source.accent : '#ffea00';
+  const visor = source && source.visor ? source.visor : '#00f0ff';
+  root.setProperty('--theme-body', body);
+  root.setProperty('--theme-accent', accent);
+  root.setProperty('--theme-main', visor);
+  root.setProperty('--theme-line', `${visor}44`);
+  root.setProperty('--theme-glow', `${visor}33`);
+}
+
+function setStatus(text, mode = 'warn'){
+  statusEl.textContent = text;
+  statusEl.className = `status ${mode}`;
+}
+
+function ratio(value, max){
+  return max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
+}
+
+function setFill(el, value){
+  el.style.width = `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`;
+}
+
+function updateSlotUi(){
+  slotButtons.forEach(button => {
+    const slot = parseInt(button.dataset.slot, 10);
+    const roster = getRosterSlot(slot);
+    button.classList.toggle('active', playerConfirmed && slot === playerIdx);
+    button.classList.toggle('connected', !!(roster && roster.connected));
+    button.classList.toggle('standby', !!(roster && !roster.connected && (roster.ready || roster.active)));
+    button.classList.toggle('offline', !roster || (!roster.connected && !roster.ready && !roster.active));
+    button.textContent = roster && roster.name ? `${slotLabel(slot)} ${roster.name}` : `Pilot ${slotLabel(slot)}`;
+    button.style.borderColor = roster && roster.visor ? roster.visor : '';
+    button.style.color = playerConfirmed && slot === playerIdx ? '#000' : (roster && roster.visor ? roster.visor : '');
+    button.disabled = onlineMode;
+    button.title = onlineMode ? (slot === playerIdx && playerConfirmed ? 'Slot asignado por el ticket seguro' : 'Los slots online no se pueden cambiar') : 'Cambiar de piloto LAN';
+  });
+  slotUrlEl.textContent = onlineMode
+    ? (playerConfirmed ? `Acceso seguro / ${slotLabel(playerIdx)}` : 'Validando acceso seguro')
+    : `${window.location.origin}/mobile-controller.html?player=${playerIdx}`;
+}
+
+function send(payload){
+  if(!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify(payload));
+}
+function nextSequence(){
+  clientSequence += 1;
+  return clientSequence;
+}
+function currentActions(){
+  const actions = {};
+  for(const action of REMOTE_ACTIONS) actions[action] = !!buttonState[action];
+  return actions;
+}
+function sendOnlineInputState(force = false){
+  if(!onlineMode || !connectionReady) return;
+  const actions = currentActions();
+  const signature = JSON.stringify(actions);
+  if(!force && signature === lastInputSignature) return;
+  lastInputSignature = signature;
+  send({ type:'input_state', actions, seq:nextSequence() });
+}
+function scheduleOnlineInputState(){
+  if(inputFlushQueued) return;
+  inputFlushQueued = true;
+  queueMicrotask(() => {
+    inputFlushQueued = false;
+    sendOnlineInputState(false);
+  });
+}
+function stopInputRefresh(){
+  clearInterval(inputRefreshTimer);
+  inputRefreshTimer = 0;
+}
+function startInputRefresh(){
+  stopInputRefresh();
+  if(!onlineMode || !connectionReady) return;
+  inputRefreshTimer = setInterval(() => sendOnlineInputState(true), INPUT_REFRESH_MS);
+}
+function scheduleReconnect(delay = null){
+  clearTimeout(reconnectTimer);
+  if(fatalDisconnect || slotDenied) return;
+  if(delay === null){
+    if(onlineMode){
+      const base = Math.min(8000, 600 * Math.pow(2, Math.min(reconnectAttempt, 4)));
+      delay = base + Math.floor(Math.random() * 280);
+      reconnectAttempt += 1;
+    } else {
+      delay = 1200;
+    }
+  }
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = 0;
+    connect();
+  }, delay);
+}
+
+function releaseAll(transmit = true){
+  if(onlineMode){
+    const previousReady = connectionReady;
+    connectionReady = false;
+    resetJoystick();
+    for(const action of REMOTE_ACTIONS){
+      if(buttonState[action]) setAction(action, false);
+    }
+    connectionReady = previousReady;
+    if(transmit) sendOnlineInputState(true);
+    return;
+  }
+  resetJoystick();
+  for(const action of REMOTE_ACTIONS){
+    if(buttonState[action]) setAction(action, false);
+  }
+}
+
+function setAction(action, pressed){
+  if(buttonState[action] === pressed) return;
+  buttonState[action] = pressed;
+  const target = document.querySelector(`.button[data-action="${action}"]`);
+  if(target) target.classList.toggle('active', pressed);
+  if(onlineMode) scheduleOnlineInputState();
+  else send({ type:'input', action, state:pressed });
+  if(pressed && navigator.vibrate) navigator.vibrate(14);
+}
+
+function bindHold(button){
+  const action = button.dataset.action;
+  const press = event => {
+    event.preventDefault();
+    event.stopPropagation();
+    button.setPointerCapture?.(event.pointerId);
+    setAction(action, true);
+  };
+  const release = event => {
+    event.preventDefault();
+    event.stopPropagation();
+    setAction(action, false);
+  };
+  button.addEventListener('pointerdown', press);
+  button.addEventListener('pointerup', release);
+  button.addEventListener('pointercancel', release);
+  button.addEventListener('pointerleave', release);
+  // Defensa adicional: en algunos Androids, el touchstart sintetiza un click
+  // que el navegador puede interpretar como double-tap-zoom si llegan dos
+  // toques al mismo boton en menos de 300ms. Cancelando aqui lo evitamos.
+  button.addEventListener('touchstart', e => e.preventDefault(), { passive:false });
+  button.addEventListener('touchend', e => e.preventDefault(), { passive:false });
+  button.addEventListener('dblclick', e => e.preventDefault());
+}
+function applyMoveState(next){
+  setAction('left', !!next.left);
+  setAction('right', !!next.right);
+  setAction('up', !!next.up);
+  setAction('down', !!next.down);
+}
+function resetJoystick(){
+  joystickPointerId = null;
+  if(joystickPad) joystickPad.classList.remove('active');
+  if(joystickStick) joystickStick.style.transform = 'translate(-50%,-50%)';
+  applyMoveState({ left:false, right:false, up:false, down:false });
+}
+function updateJoystick(clientX, clientY){
+  if(!joystickPad || !joystickStick) return;
+  const rect = joystickPad.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const rawX = (clientX - cx) / (rect.width * 0.5);
+  const rawY = (clientY - cy) / (rect.height * 0.5);
+  const len = Math.hypot(rawX, rawY) || 1;
+  const dx = len > 1 ? rawX / len : rawX;
+  const dy = len > 1 ? rawY / len : rawY;
+  const travel = Math.min(rect.width, rect.height) * 0.24;
+  joystickPad.classList.add('active');
+  joystickStick.style.transform = `translate(-50%,-50%) translate(${Math.round(dx * travel)}px, ${Math.round(dy * travel)}px)`;
+  const deadZone = 0.24;
+  applyMoveState({
+    left: dx < -deadZone,
+    right: dx > deadZone,
+    up: dy < -deadZone,
+    down: dy > deadZone
+  });
+}
+function bindJoystick(){
+  if(!joystickPad) return;
+  joystickPad.addEventListener('pointerdown', event => {
+    event.preventDefault();
+    joystickPointerId = event.pointerId;
+    joystickPad.setPointerCapture?.(event.pointerId);
+    updateJoystick(event.clientX, event.clientY);
+    if(navigator.vibrate) navigator.vibrate(12);
+  });
+  joystickPad.addEventListener('pointermove', event => {
+    if(joystickPointerId !== event.pointerId) return;
+    event.preventDefault();
+    updateJoystick(event.clientX, event.clientY);
+  });
+  const release = event => {
+    if(joystickPointerId !== null && event.pointerId !== joystickPointerId) return;
+    event.preventDefault();
+    resetJoystick();
+  };
+  joystickPad.addEventListener('pointerup', release);
+  joystickPad.addEventListener('pointercancel', release);
+  joystickPad.addEventListener('pointerleave', event => {
+    if(joystickPointerId !== event.pointerId) return;
+    event.preventDefault();
+    resetJoystick();
+  });
+}
+
+function setVideoStatus(text, live = false){
+  videoPlaceholderEl.textContent = text || 'Esperando video del anfitrion';
+  gameViewEl.classList.toggle('video-live', !!live);
+}
+
+function setAudioEnabled(enabled){
+  const next = !!enabled;
+  gameVideoEl.muted = !next;
+  audioToggleEl.classList.toggle('active', next);
+  audioToggleEl.setAttribute('aria-pressed', next ? 'true' : 'false');
+  audioToggleEl.textContent = next ? 'Audio on' : 'Audio off';
+  if(next) gameVideoEl.play().catch(() => setAudioEnabled(false));
+}
+
+function normalizeIceServers(value){
+  if(!Array.isArray(value)) return [];
+  return value.filter(entry => {
+    if(!entry || typeof entry !== 'object') return false;
+    return typeof entry.urls === 'string' || (Array.isArray(entry.urls) && entry.urls.every(url => typeof url === 'string'));
+  }).slice(0, 8);
+}
+
+function rememberView(next){
+  requestedView = normalizeView(next);
+  if(!onlineMode) return;
+  try {
+    window.sessionStorage.setItem(ONLINE_VIEW_KEY, requestedView);
+  } catch(error){}
+}
+
+function applyViewMode(next, options = {}){
+  const notify = options.notify === true;
+  const remember = options.remember !== false;
+  const force = options.force === true;
+  let normalized = normalizeView(next);
+  if(normalized === 'stream' && !force && !allowedViews.includes('stream')) normalized = 'controller';
+  const previous = viewMode;
+  viewMode = normalized;
+  if(remember) rememberView(normalized);
+
+  shellEl.classList.toggle('view-stream', normalized === 'stream');
+  gameViewEl.setAttribute('aria-hidden', normalized === 'stream' ? 'false' : 'true');
+  viewControllerEl.classList.toggle('active', normalized === 'controller');
+  viewStreamEl.classList.toggle('active', normalized === 'stream');
+  viewStreamEl.disabled = !onlineMode || !allowedViews.includes('stream');
+
+  if(normalized === 'controller' && previous === 'stream'){
+    stopRtcPeer(notify, 'view_controller');
+  } else if(normalized === 'stream' && !rtcPeer){
+    setVideoStatus('Esperando video del anfitrion', false);
+  }
+
+  if(notify && onlineMode && connectionReady){
+    send({ type:'set_view', viewMode:normalized });
+  }
+}
+
+function updateGameHud(){
+  if(!snapshot){
+    gameHudEl.textContent = 'Sin telemetria';
+    return;
+  }
+  const pilot = getPilotState(playerIdx);
+  const boss = snapshot.boss;
+  const pilotText = pilot
+    ? ((pilot.name || slotLabel(playerIdx)) + ' · HP ' + pilot.hp + '/' + pilot.maxHp + ' · CORE ' + pilot.special + '/' + pilot.maxSpecial)
+    : ('Piloto ' + slotLabel(playerIdx) + ' · esperando partida');
+  const bossText = boss ? (' · BOSS ' + boss.hp + '/' + boss.maxHp) : '';
+  gameHudEl.textContent = pilotText + bossText;
+}
+
+function clearRtcFailureTimer(){
+  clearTimeout(rtcFailureTimer);
+  rtcFailureTimer = 0;
+}
+
+function stopRtcPeer(notify = false, reason = 'closed'){
+  clearRtcFailureTimer();
+  const negotiationId = rtcNegotiationId;
+  const peer = rtcPeer;
+  rtcPeer = null;
+  rtcNegotiationId = '';
+  pendingIceNegotiationId = '';
+  pendingIceCandidates = [];
+  if(peer){
+    peer.onicecandidate = null;
+    peer.ontrack = null;
+    peer.onconnectionstatechange = null;
+    peer.oniceconnectionstatechange = null;
+    try { peer.close(); } catch(error){}
+  }
+  if(gameVideoEl.srcObject){
+    try {
+      for(const track of gameVideoEl.srcObject.getTracks()) track.stop();
+    } catch(error){}
+    gameVideoEl.srcObject = null;
+  }
+  setVideoStatus(reason === 'host_stop' ? 'Video detenido por el anfitrion' : 'Video inactivo', false);
+  if(notify && onlineMode && connectionReady && negotiationId){
+    send({ type:'webrtc_stop', negotiationId, reason });
+  }
+}
+
+function fallbackToController(message){
+  stopRtcPeer(true, 'fallback');
+  applyViewMode('controller', { notify:true, force:true });
+  warningStatusEl.textContent = message || 'Video no disponible. Los controles siguen conectados.';
+  messageEl.textContent = message || 'Video no disponible; usa la salida principal.';
+}
+
+function ensureRtcPeer(negotiationId){
+  if(rtcPeer && rtcNegotiationId === negotiationId) return rtcPeer;
+  stopRtcPeer(false, 'renegotiate');
+  if(typeof window.RTCPeerConnection !== 'function') throw new Error('WebRTC unavailable');
+
+  const peer = new RTCPeerConnection({ iceServers:rtcIceServers });
+  rtcPeer = peer;
+  rtcNegotiationId = negotiationId;
+  peer.onicecandidate = event => {
+    if(peer !== rtcPeer || negotiationId !== rtcNegotiationId) return;
+    if(!event.candidate) return;
+    const candidate = typeof event.candidate.toJSON === 'function'
+      ? event.candidate.toJSON()
+      : event.candidate;
+    send({ type:'webrtc_ice', negotiationId, candidate });
+  };
+  peer.ontrack = event => {
+    if(peer !== rtcPeer) return;
+    const stream = event.streams && event.streams[0]
+      ? event.streams[0]
+      : new MediaStream([event.track]);
+    gameVideoEl.srcObject = stream;
+    gameVideoEl.play().catch(() => {});
+    setVideoStatus('Video conectado', true);
+  };
+  peer.onconnectionstatechange = () => {
+    if(peer !== rtcPeer) return;
+    clearRtcFailureTimer();
+    if(peer.connectionState === 'connected'){
+      setVideoStatus('Video conectado', true);
+      return;
+    }
+    if(peer.connectionState === 'failed'){
+      fallbackToController('No fue posible establecer el video. Control y estado siguen activos.');
+      return;
+    }
+    if(peer.connectionState === 'disconnected'){
+      setVideoStatus('Video reconectando', false);
+      rtcFailureTimer = setTimeout(() => {
+        if(peer === rtcPeer && peer.connectionState === 'disconnected'){
+          fallbackToController('Se perdio el video. Control y estado siguen activos.');
+        }
+      }, 4500);
+    }
+  };
+  peer.oniceconnectionstatechange = () => {
+    if(peer === rtcPeer && peer.iceConnectionState === 'failed'){
+      fallbackToController('Fallo la ruta de video. Revisa la configuracion TURN.');
+    }
+  };
+  return peer;
+}
+
+async function addRtcCandidate(peer, candidate){
+  try {
+    await peer.addIceCandidate(candidate || null);
+  } catch(error){
+    if(peer === rtcPeer) warningStatusEl.textContent = 'Se descarto un candidato de video incompatible.';
+  }
+}
+
+async function handleWebRtcOffer(payload){
+  const negotiationId = typeof payload.negotiationId === 'string' ? payload.negotiationId : '';
+  const offerSdp = payload.sdp;
+  if(viewMode !== 'stream' || !negotiationId || typeof offerSdp !== 'string' || !offerSdp) return;
+  const earlyCandidates = pendingIceNegotiationId === negotiationId ? pendingIceCandidates.slice() : [];
+  try {
+    const peer = ensureRtcPeer(negotiationId);
+    pendingIceNegotiationId = negotiationId;
+    pendingIceCandidates = earlyCandidates;
+    await peer.setRemoteDescription({ type:'offer', sdp:offerSdp });
+    if(peer !== rtcPeer || negotiationId !== rtcNegotiationId) return;
+    const queued = pendingIceCandidates.slice();
+    pendingIceCandidates = [];
+    for(const candidate of queued) await addRtcCandidate(peer, candidate);
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    if(peer !== rtcPeer || negotiationId !== rtcNegotiationId) return;
+    send({ type:'webrtc_answer', negotiationId, sdp:peer.localDescription.sdp });
+  } catch(error){
+    fallbackToController('El navegador no pudo preparar el video. Control y estado siguen activos.');
+  }
+}
+
+function handleWebRtcIce(payload){
+  const negotiationId = typeof payload.negotiationId === 'string' ? payload.negotiationId : '';
+  if(!negotiationId || !Object.prototype.hasOwnProperty.call(payload, 'candidate')) return;
+  if(!rtcPeer){
+    if(pendingIceNegotiationId !== negotiationId){
+      pendingIceNegotiationId = negotiationId;
+      pendingIceCandidates = [];
+    }
+    if(pendingIceCandidates.length < 96) pendingIceCandidates.push(payload.candidate);
+    return;
+  }
+  if(negotiationId !== rtcNegotiationId) return;
+  if(!rtcPeer.remoteDescription){
+    if(pendingIceCandidates.length < 96) pendingIceCandidates.push(payload.candidate);
+    return;
+  }
+  void addRtcCandidate(rtcPeer, payload.candidate);
+}
+
+function renderSnapshot(){
+  const roster = getRosterSlot(playerIdx);
+  const pilot = getPilotState(playerIdx);
+  applyPilotTheme(pilot || roster);
+  updateSlotUi();
+  updateGameHud();
+
+  if(!snapshot){
+    pilotNameEl.textContent = `Pilot ${slotLabel(playerIdx)}`;
+    stageTagEl.textContent = 'Awaiting host';
+    messageEl.textContent = 'Awaiting mecha telemetry';
+    return;
+  }
+  pilotNameEl.textContent = `${(pilot || roster || {}).name || 'Pilot Link'} / ${slotLabel(playerIdx)}`;
+  stageTagEl.textContent = `${snapshot.stageTag || 'STAGE'} / ${snapshot.state || 'IDLE'}`;
+  if(!pilot){
+    hpText.textContent = '--';
+    shieldText.textContent = '--';
+    specialText.textContent = '--';
+    flightText.textContent = '--';
+    setFill(hpFill, 0);
+    setFill(shieldFill, 0);
+    setFill(specialFill, 0);
+    setFill(flightFill, 0);
+    setFill(repairFill, roster && roster.ready ? 1 : 0);
+    repairText.textContent = roster && roster.ready ? 'READY' : 'LINK';
+    warningStatusEl.textContent = roster && roster.active ? 'Esperando el arranque del host.' : 'Slot fuera del roster actual.';
+    messageEl.textContent = snapshot.message || (roster && roster.ready ? 'Cockpit armed' : 'Select and confirm this pilot on host');
+    telemetryEl.textContent = roster ? `${roster.connected ? 'Connected' : 'Offline'} | ${roster.ready ? 'Ready' : 'Standby'} | ${roster.active ? 'Roster live' : 'Not active'}` : 'No telemetry yet.';
+  } else {
+    hpText.textContent = `${pilot.hp}/${pilot.maxHp}`;
+    shieldText.textContent = `${pilot.shield}/${pilot.maxShield}`;
+    specialText.textContent = `${pilot.special}/${pilot.maxSpecial}`;
+    flightText.textContent = `${Math.round((pilot.flightRatio || 0) * 100)}%`;
+    setFill(hpFill, ratio(pilot.hp, pilot.maxHp));
+    setFill(shieldFill, ratio(pilot.shield, pilot.maxShield));
+    setFill(specialFill, ratio(pilot.special, pilot.maxSpecial));
+    setFill(flightFill, pilot.flightRatio || 0);
+
+    if(pilot.repairState === 'downed'){
+      repairText.textContent = `${pilot.repairSeconds.toFixed(1)}s`;
+      setFill(repairFill, pilot.repairRatio || 0);
+      warningStatusEl.textContent = 'Repair required. El mecha vivo debe mantener SYSTEM cerca del aliado.';
+    } else if(pilot.repairState === 'destroyed'){
+      repairText.textContent = 'Offline';
+      setFill(repairFill, 0);
+      warningStatusEl.textContent = 'Critical loss. Esta unidad ya no puede volver.';
+    } else {
+      repairText.textContent = 'OK';
+      setFill(repairFill, pilot.repairProgress || 1);
+      warningStatusEl.textContent = 'No active alerts.';
+    }
+    messageEl.textContent = snapshot.message || (pilot.repairState === 'downed' ? 'Repair frame compromised' : 'Systems nominal');
+    telemetryEl.textContent = `Down count ${pilot.downCount} | Core ${pilot.special}/${pilot.maxSpecial} | Shield ${pilot.shield}/${pilot.maxShield}`;
+  }
+
+  const boss = snapshot.boss;
+  if(boss){
+    bossStatusEl.textContent = `${boss.head2Active ? 'Head 2' : 'Head 1'} / HP ${boss.hp}/${boss.maxHp}${boss.airborne ? ' / Air' : ''}`;
+  } else {
+    bossStatusEl.textContent = 'No target';
+  }
+  hostStatusEl.textContent = snapshot.stageName ? `${snapshot.stageName} / ${snapshot.state}` : 'Host waiting';
+}
+
+function clearStoredOnlineTicket(){
+  try {
+    window.sessionStorage.removeItem(ONLINE_TICKET_KEY);
+  } catch(error){}
+}
+
+function applyServerInfo(payload){
+  if(onlineMode){
+    if(Number.isInteger(payload.player) && payload.player >= 0 && payload.player < MAX_PLAYERS){
+      playerIdx = payload.player;
+      playerConfirmed = true;
+    }
+    allowedViews = Array.isArray(payload.allowedViews)
+      ? payload.allowedViews.filter(value => value === 'controller' || value === 'stream')
+      : ['controller'];
+    if(!allowedViews.includes('controller')) allowedViews.unshift('controller');
+    rtcIceServers = normalizeIceServers(payload.iceServers);
+    connectionReady = true;
+    reconnectAttempt = 0;
+    clientSequence = 0;
+    lastInputSignature = '';
+    const serverView = normalizeView(payload.viewMode);
+    const initialView = allowedViews.includes(requestedView) ? requestedView : serverView;
+    applyViewMode(initialView, { notify:false, remember:false });
+    startInputRefresh();
+    sendOnlineInputState(true);
+    send({ type:'request_snapshot' });
+    setStatus('Linked', 'on');
+    hostStatusEl.textContent = 'Sesion online segura. Esperando telemetria.';
+    updateSlotUi();
+    return;
+  }
+
+  hostStatusEl.textContent = 'Cockpit linked. Waiting for host telemetry.';
+  if(Array.isArray(payload.joinUrls)){
+    slotUrlEl.textContent = payload.joinUrls[playerIdx] || slotUrlEl.textContent;
+  }
+}
+
+function handleIncomingPayload(payload){
+  if(!payload || typeof payload.type !== 'string') return;
+  if(payload.type === 'ping'){
+    send({ type:'pong', ts:payload.ts });
+    return;
+  }
+  if(payload.type === 'server_info' || payload.type === 'hello'){
+    applyServerInfo(payload);
+    return;
+  }
+  if(payload.type === 'snapshot'){
+    snapshot = payload.snapshot;
+    renderSnapshot();
+    return;
+  }
+  if(payload.type === 'view_mode' && onlineMode){
+    applyViewMode(payload.viewMode, { notify:false, remember:true });
+    return;
+  }
+  if(payload.type === 'webrtc_offer' && onlineMode){
+    void handleWebRtcOffer(payload);
+    return;
+  }
+  if(payload.type === 'webrtc_ice' && onlineMode){
+    handleWebRtcIce(payload);
+    return;
+  }
+  if(payload.type === 'webrtc_stop' && onlineMode){
+    if(!payload.negotiationId || payload.negotiationId === rtcNegotiationId){
+      stopRtcPeer(false, 'host_stop');
+      applyViewMode('controller', { notify:false, force:true });
+      warningStatusEl.textContent = payload.reason || 'El anfitrion detuvo el video. Los controles siguen activos.';
+    }
+    return;
+  }
+  if(payload.type === 'host_left'){
+    stopRtcPeer(false, 'host_stop');
+    hostStatusEl.textContent = 'Anfitrion desconectado.';
+    warningStatusEl.textContent = 'La sesion espera que el anfitrion se reconecte.';
+    return;
+  }
+  if(payload.type === 'slot_replaced'){
+    fatalDisconnect = true;
+    clearStoredOnlineTicket();
+    setStatus('Replaced', 'warn');
+    warningStatusEl.textContent = 'Este acceso se abrio en otro dispositivo o pestana.';
+    try { ws.close(); } catch(error){}
+    return;
+  }
+  if(payload.type === 'slot_denied'){
+    slotDenied = true;
+    setStatus('Slot locked', 'warn');
+    messageEl.textContent = 'Pilot ' + slotLabel(payload.player ?? playerIdx) + ' already linked';
+    warningStatusEl.textContent = 'Ese QR ya esta ocupado por otro celular. Elige otro cockpit libre.';
+    telemetryEl.textContent = 'Slot blocked to avoid dual-control interference.';
+    try { ws.close(); } catch(error){}
+    return;
+  }
+  if(payload.type === 'input_rejected' || payload.type === 'message_rejected'){
+    warningStatusEl.textContent = 'El relay rechazo un mensaje (' + (payload.reason || 'schema') + ').';
+    return;
+  }
+  if(payload.type === 'toast' && payload.message){
+    messageEl.textContent = payload.message;
+  }
+}
+
+function isFatalOnlineClose(code){
+  return code === 4000 || code === 4009 || code === 4401 || code === 4403;
+}
+
+function connect(){
+  clearTimeout(reconnectTimer);
+  reconnectTimer = 0;
+  if(fatalDisconnect) return;
+  if(ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.CLOSING)) return;
+  slotDenied = false;
+  connectionReady = false;
+  stopInputRefresh();
+  releaseAll(false);
+  stopRtcPeer(false, 'reconnect');
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  let socket = null;
+  try {
+    if(onlineMode){
+      if(!validProtocolPart(onlineBootstrap.ticket) || !validProtocolPart(deviceSecret)){
+        fatalDisconnect = true;
+        clearStoredOnlineTicket();
+        setStatus('Invalid link', 'warn');
+        messageEl.textContent = 'El enlace seguro no es valido en este navegador.';
+        return;
+      }
+      const onlineUrl = proto + '//' + window.location.host + '/ws';
+      socket = new WebSocket(onlineUrl, [
+        'mecha.v1',
+        'ticket.' + onlineBootstrap.ticket,
+        'device.' + deviceSecret
+      ]);
+      setStatus('Authorizing', 'warn');
+    } else {
+      const lanUrl = proto + '//' + window.location.host + '/ws?role=controller&player=' +
+        playerIdx + '&client=' + encodeURIComponent(controllerId);
+      socket = new WebSocket(lanUrl);
+      setStatus('Linking', 'warn');
+    }
+  } catch(error){
+    setStatus(onlineMode ? 'Invalid link' : 'Hub error', 'warn');
+    if(onlineMode) fatalDisconnect = true;
+    else scheduleReconnect();
+    return;
+  }
+  ws = socket;
+
+  socket.onopen = () => {
+    if(socket !== ws) return;
+    if(onlineMode){
+      clientSequence = 0;
+      lastInputSignature = '';
+      setStatus('Authorizing', 'warn');
+      send({ type:'controller_hello', viewMode:requestedView });
+    } else {
+      setStatus('Linked', 'on');
+      send({ type:'request_snapshot' });
+    }
+  };
+  socket.onmessage = event => {
+    if(socket !== ws) return;
+    let payload = null;
+    try {
+      payload = JSON.parse(event.data);
+    } catch(error){
+      return;
+    }
+    handleIncomingPayload(payload);
+  };
+  socket.onclose = event => {
+    if(socket !== ws) return;
+    ws = null;
+    connectionReady = false;
+    stopInputRefresh();
+    releaseAll(false);
+    stopRtcPeer(false, 'disconnected');
+    if(onlineMode){
+      playerConfirmed = false;
+      updateSlotUi();
+      if(isFatalOnlineClose(event.code)) fatalDisconnect = true;
+      if(fatalDisconnect){
+        clearStoredOnlineTicket();
+        setStatus(event.code === 4403 ? 'Forbidden' : 'Link expired', 'warn');
+        messageEl.textContent = 'La sesion termino o el acceso seguro ya no es valido.';
+        return;
+      }
+    }
+    if(slotDenied){
+      setStatus('Slot locked', 'warn');
+      return;
+    }
+    setStatus('Relinking', 'warn');
+    if(manualReconnect){
+      manualReconnect = false;
+      scheduleReconnect(120);
+      return;
+    }
+    scheduleReconnect(onlineMode ? null : 1200);
+  };
+  socket.onerror = () => setStatus(onlineMode ? 'Relay error' : 'Hub error', 'warn');
+}
+
+slotButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    if(onlineMode) return;
+    playerIdx = parseInt(button.dataset.slot, 10);
+    updateSlotUi();
+    releaseAll();
+    if(ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)){
+      manualReconnect = true;
+      ws.close();
+    } else {
+      connect();
+    }
+  });
+});
+
+viewControllerEl.addEventListener('click', () => {
+  applyViewMode('controller', { notify:true, force:true });
+});
+viewStreamEl.addEventListener('click', () => {
+  if(viewStreamEl.disabled) return;
+  if(typeof window.RTCPeerConnection !== 'function'){
+    fallbackToController('Este navegador no admite video WebRTC. El control sigue disponible.');
+    return;
+  }
+  applyViewMode('stream', { notify:true });
+});
+audioToggleEl.addEventListener('click', () => {
+  setAudioEnabled(gameVideoEl.muted);
+});
+
+actionButtons.forEach(bindHold);
+bindJoystick();
+
+function handleBackground(){
+  releaseAll(true);
+  stopInputRefresh();
+  if(viewMode === 'stream'){
+    fallbackToController('Video pausado al salir de la pantalla. Los controles siguen activos.');
+  }
+}
+
+window.addEventListener('blur', handleBackground);
+window.addEventListener('focus', () => {
+  if(connectionReady){
+    startInputRefresh();
+    send({ type:'request_snapshot' });
+    sendOnlineInputState(true);
+  }
+});
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden) handleBackground();
+  else if(connectionReady){
+    startInputRefresh();
+    send({ type:'request_snapshot' });
+  }
+});
+window.addEventListener('beforeunload', () => {
+  clearTimeout(reconnectTimer);
+  stopInputRefresh();
+  releaseAll(true);
+  stopRtcPeer(true, 'page_closed');
+});
+
+updateSlotUi();
+applyPilotTheme(null);
+setAudioEnabled(false);
+applyViewMode('controller', { notify:false, remember:false, force:true });
+renderSnapshot();
+connect();
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+backups/
+graphify-out/
+.git/
+.agents/
+.claude/
+.pm/
+.pytest_cache/
+**/__pycache__/
+.env
+online_service/.env
+*.zip
+mechakatz_config.html
+mechakatz_vs_kaiju_V9.html
+MECHAKATZ.json

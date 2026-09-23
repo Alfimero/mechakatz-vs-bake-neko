@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Secretos
+.env
+online_service/.env
+
+# Respaldos locales y binarios de terceros
+backups/
+*.zip
+*.whl
+
+# Herramientas locales (IA, gestor de avance, grafo regenerable)
+.claude/
+.agents/
+.pm/
+PROGRESS.md
+graphify-out/
+CLAUDE.md
+Contexto/
+
+# Sistema operativo / editores
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+.idea/

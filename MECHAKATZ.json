@@ -1,0 +1,581 @@
+{
+  "general": {
+    "lockTabInGame": false,
+    "scanlines": true,
+    "screenshakeIntensity": 1,
+    "flashIntensity": 1,
+    "friendlyFireMul": 0.5,
+    "testBossHotkey": "",
+    "allowControllerStart": false,
+    "autoExportOnEnd": true,
+    "bgPalette": {
+      "bg": "#0a0014",
+      "dark": "#18002e"
+    }
+  },
+  "physics": {
+    "moveSpeedMul": 1,
+    "gravity": 0.32,
+    "knockbackLight": 1.6,
+    "knockbackHeavy": 3.4,
+    "knockbackSpecial": 4.8,
+    "hitstopFrames": 5,
+    "attackRange": 22,
+    "grabRange": 18,
+    "shieldHp": 4,
+    "shieldRegenFrames": 240,
+    "enemyKnockTimeMul": 1,
+    "specialMeterPerHit": 4,
+    "specialMeterMax": 100,
+    "specialDamageDecay": 0.5,
+    "specialMaxHits": 6
+  },
+  "flight": {
+    "enabled": true,
+    "keyP1": "space",
+    "keyP2": "l",
+    "hpCostPerSecond": 6,
+    "minHpPercentToStart": 0.2,
+    "maxDurationSeconds": 5,
+    "verticalSpeed": 1.5,
+    "horizontalSpeedMul": 0.85,
+    "diveKickDamage": 22,
+    "diveKickSpeed": 5.6,
+    "airShotDamage": 8,
+    "airShotSpeed": 4.2,
+    "airShotCooldownFrames": 18,
+    "hpPerEnemyHit": 1.5,
+    "hpPerEnemyKill": 8,
+    "hpPerBossHit": 3,
+    "flameColor": "#ff7e1a",
+    "flameColor2": "#ffea00",
+    "diveKickColor": "#ffea00",
+    "airShotColor": "#00f0ff"
+  },
+  "revive": {
+    "baseWindowSeconds": 18,
+    "minWindowSeconds": 2,
+    "repairFrames": 90,
+    "hpCostPerSecond": 12,
+    "reviveHpPercent": 0.35,
+    "maxDownsBeforeDestroy": 8
+  },
+  "remote": {
+    "enabled": true,
+    "mode": "lan",
+    "hostWsUrl": "ws://127.0.0.1:8765/ws?role=host",
+    "serviceHttpUrl": "http://127.0.0.1:8787",
+    "hostKey": "",
+    "sessionMode": "mixed",
+    "sessionMinutes": 60,
+    "streamFps": 30,
+    "retryMs": 2000,
+    "snapshotIntervalFrames": 12
+  },
+  "players": [
+    {
+      "name": "BURTRON",
+      "body": "#353f40",
+      "accent": "#788591",
+      "visor": "#51af12",
+      "stat": "SPEEDBOY",
+      "spd": 2.6,
+      "hp": 110,
+      "atk": 8,
+      "lightDmg": 8,
+      "heavyDmg": 16,
+      "specialDmg": 40,
+      "sizeScale": 1,
+      "special": "WAVE BLAST",
+      "bullet": "#00f0ff"
+    },
+    {
+      "name": "MEFISTECH",
+      "body": "#666666",
+      "accent": "#ffffff",
+      "visor": "#ffea00",
+      "stat": "BIGBOY",
+      "spd": 1.55,
+      "hp": 140,
+      "atk": 10,
+      "lightDmg": 11,
+      "heavyDmg": 20,
+      "specialDmg": 50,
+      "sizeScale": 1.2,
+      "special": "GROUND POUND",
+      "bullet": "#ff7e1a"
+    },
+    {
+      "name": "ERISPRIME",
+      "body": "#0e0e0b",
+      "accent": "#4b473f",
+      "visor": "#e4e70d",
+      "stat": "CHIQUITITA",
+      "spd": 3.5,
+      "hp": 110,
+      "atk": 10,
+      "lightDmg": 10,
+      "heavyDmg": 18,
+      "specialDmg": 27,
+      "sizeScale": 0.75,
+      "special": "THUNDER STRIKE",
+      "bullet": "#ffea00"
+    },
+    {
+      "name": "BEYLISZETA",
+      "body": "#f2f2f2",
+      "accent": "#908b92",
+      "visor": "#004cc7",
+      "stat": "STEALTH",
+      "spd": 2.4,
+      "hp": 110,
+      "atk": 11,
+      "lightDmg": 11,
+      "heavyDmg": 20,
+      "specialDmg": 44,
+      "sizeScale": 1.02,
+      "special": "SHADOW SLASH",
+      "bullet": "#ff2e88"
+    }
+  ],
+  "enemies": {
+    "small": {
+      "hp": 18,
+      "atk": 5,
+      "spd": 1,
+      "dropChance": 0.25,
+      "color": "#00ff7f",
+      "atkRange": 14,
+      "knockTime": 30
+    },
+    "big": {
+      "hp": 50,
+      "atk": 11,
+      "spd": 0.72,
+      "dropChance": 0.7,
+      "color": "#ff2e88",
+      "atkRange": 18,
+      "knockTime": 48
+    },
+    "thrower": {
+      "hp": 22,
+      "atk": 8,
+      "spd": 0.52,
+      "dropChance": 0.5,
+      "color": "#9b30ff",
+      "atkRange": 130,
+      "knockTime": 34
+    }
+  },
+  "boss": {
+    "hpPerHead": 360,
+    "laserDamage": 15,
+    "fireDamage": 10,
+    "slamDamage": 22,
+    "autoAttackCooldownFrames": 180,
+    "introTotalSeconds": 6,
+    "introBossCueSeconds": 0.5,
+    "introBossDialogueSeconds": 2.5,
+    "introPlayersCueSeconds": 3.5,
+    "introPlayersDialogueSeconds": 3,
+    "headColorL": "#9b30ff",
+    "headColorR": "#ff2e88",
+    "bodyColor": "#3a005a",
+    "eyeColor": "#ff3030"
+  },
+  "stages": [
+    {
+      "name": "OUTSKIRTS",
+      "tag": "STAGE 1 - DESERT",
+      "bg": "desert",
+      "length": 1200,
+      "groundRatio": 0.51,
+      "waveEnemyBonus": 6,
+      "laneMinZ": -220,
+      "laneMaxZ": -4,
+      "spawnLimit": 10,
+      "spawnWindowSeconds": 20,
+      "sky1": "#ff9966",
+      "sky2": "#5a3a6a",
+      "mountain": "#5a3a6a",
+      "ground": "#d4a76a",
+      "groundDark": "#8b6914",
+      "detailColor": "#ff7e1a"
+    },
+    {
+      "name": "SUBURBS",
+      "tag": "STAGE 2 - URBAN ZONE",
+      "bg": "urban",
+      "length": 1200,
+      "groundRatio": 0.51,
+      "waveEnemyBonus": 6,
+      "laneMinZ": -220,
+      "laneMaxZ": -4,
+      "spawnLimit": 15,
+      "spawnWindowSeconds": 15,
+      "sky1": "#5a3a6a",
+      "sky2": "#9b30ff",
+      "mountain": "#3a005a",
+      "ground": "#2a2a2a",
+      "groundDark": "#1a1a1a",
+      "detailColor": "#ffea00"
+    },
+    {
+      "name": "NEON CITY",
+      "tag": "STAGE 3 - FINAL",
+      "bg": "city",
+      "length": 700,
+      "groundRatio": 0.51,
+      "waveEnemyBonus": 6,
+      "laneMinZ": -220,
+      "laneMaxZ": -4,
+      "spawnLimit": 20,
+      "spawnWindowSeconds": 10,
+      "sky1": "#0a0a3a",
+      "sky2": "#240046",
+      "mountain": "#1a0040",
+      "ground": "#1a1a2a",
+      "groundDark": "#0a0a1a",
+      "detailColor": "#ff2e88"
+    }
+  ],
+  "hud": {
+    "hpColorHi": "#00ff7f",
+    "hpColorLo": "#ff2e88",
+    "specialColor": "#ffea00",
+    "bossHpColor": "#ff2e88",
+    "textColor": "#00f0ff",
+    "textHighlight": "#ffea00",
+    "barScale": 1,
+    "playerHudInsetX": 4,
+    "playerHudTopY": 10,
+    "playerHudGapY": 12,
+    "stageTagSize": 6,
+    "stageTagX": 240,
+    "stageTagY": 267
+  },
+  "text": {
+    "title1": "MECHAKATZ",
+    "title2": "VS BAKE-NEKO!",
+    "subtitle": "PRESS ANY KEY - 1 TO 4 PILOTS",
+    "selectTitle": "SELECT YOUR MECHA-CAT",
+    "stageClear": "STAGE CLEAR",
+    "gameOver": "GAME OVER",
+    "victory": "BAKE-NEKO DEFEATED",
+    "p1Label": "P1",
+    "p2Label": "P2",
+    "p3Label": "P3",
+    "p4Label": "P4"
+  },
+  "scoreboard": {
+    "currentRunName": "QUERETARO",
+    "entries": [
+      {
+        "name": "CDMX",
+        "total": 73740,
+        "result": "victory",
+        "stage": 3,
+        "players": [
+          {
+            "slot": "P1",
+            "pilot": "MEFISTECH",
+            "score": 57890
+          },
+          {
+            "slot": "P2",
+            "pilot": "ERISPRIME",
+            "score": 5470
+          },
+          {
+            "slot": "P3",
+            "pilot": "BEYLISZETA",
+            "score": 10310
+          },
+          {
+            "slot": "P4",
+            "pilot": "BURTRON",
+            "score": 70
+          }
+        ],
+        "ts": "2026-05-05T03:02:58.222Z"
+      },
+      {
+        "name": "ACAYUCA",
+        "total": 57050,
+        "result": "gameover",
+        "stage": 3,
+        "players": [
+          {
+            "slot": "P3",
+            "pilot": "MEFISTECH",
+            "score": 55150
+          },
+          {
+            "slot": "P4",
+            "pilot": "BEYLISZETA",
+            "score": 1900
+          }
+        ],
+        "ts": "2026-05-06T04:46:07.761Z"
+      },
+      {
+        "name": "GUADALAJARA",
+        "total": 29190,
+        "result": "victory",
+        "stage": 3,
+        "players": [
+          {
+            "slot": "P3",
+            "pilot": "ERISPRIME",
+            "score": 210
+          },
+          {
+            "slot": "P4",
+            "pilot": "BEYLISZETA",
+            "score": 28980
+          }
+        ],
+        "ts": "2026-05-11T04:32:54.226Z"
+      },
+      {
+        "name": "QUERETARO",
+        "total": 26950,
+        "result": "victory",
+        "stage": 3,
+        "players": [
+          {
+            "slot": "P1",
+            "pilot": "BURTRON",
+            "score": 640
+          },
+          {
+            "slot": "P2",
+            "pilot": "ERISPRIME",
+            "score": 2520
+          },
+          {
+            "slot": "P3",
+            "pilot": "MEFISTECH",
+            "score": 1980
+          },
+          {
+            "slot": "P4",
+            "pilot": "BEYLISZETA",
+            "score": 21810
+          }
+        ],
+        "ts": "2026-05-12T03:10:22.852Z"
+      },
+      {
+        "name": "ZAMORA",
+        "total": 24320,
+        "result": "victory",
+        "stage": 3,
+        "players": [
+          {
+            "slot": "P1",
+            "pilot": "BURTRON",
+            "score": 820
+          },
+          {
+            "slot": "P2",
+            "pilot": "BEYLISZETA",
+            "score": 1350
+          },
+          {
+            "slot": "P3",
+            "pilot": "ERISPRIME",
+            "score": 200
+          },
+          {
+            "slot": "P4",
+            "pilot": "MEFISTECH",
+            "score": 21950
+          }
+        ],
+        "ts": "2026-05-08T03:50:12.720Z"
+      },
+      {
+        "name": "LEON",
+        "total": 21020,
+        "result": "victory",
+        "stage": 3,
+        "players": [
+          {
+            "slot": "P1",
+            "pilot": "BURTRON",
+            "score": 430
+          },
+          {
+            "slot": "P2",
+            "pilot": "MEFISTECH",
+            "score": 20420
+          },
+          {
+            "slot": "P3",
+            "pilot": "BEYLISZETA",
+            "score": 120
+          },
+          {
+            "slot": "P4",
+            "pilot": "BURTRON",
+            "score": 50
+          }
+        ],
+        "ts": "2026-05-07T05:37:41.935Z"
+      },
+      {
+        "name": "COLIMA",
+        "total": 2640,
+        "result": "gameover",
+        "stage": 3,
+        "players": [
+          {
+            "slot": "P1",
+            "pilot": "MEFISTECH",
+            "score": 840
+          },
+          {
+            "slot": "P2",
+            "pilot": "ERISPRIME",
+            "score": 390
+          },
+          {
+            "slot": "P3",
+            "pilot": "BURTRON",
+            "score": 1410
+          }
+        ],
+        "ts": "2026-05-09T03:40:40.280Z"
+      },
+      {
+        "name": "TLAXCALA",
+        "total": 670,
+        "result": "gameover",
+        "stage": 1,
+        "players": [],
+        "ts": "2026-05-03T16:15:46.704417Z"
+      },
+      {
+        "name": "SAYULITA",
+        "total": 560,
+        "result": "gameover",
+        "stage": 1,
+        "players": [
+          {
+            "slot": "P1",
+            "pilot": "ERISPRIME",
+            "score": 560
+          }
+        ],
+        "ts": "2026-05-11T01:18:55.200Z"
+      },
+      {
+        "name": "CHILPANCINGO",
+        "total": 350,
+        "result": "gameover",
+        "stage": 1,
+        "players": [],
+        "ts": "2026-05-02T14:15:46.704417Z"
+      }
+    ]
+  },
+  "midi": {
+    "enabledDevices": [
+      "input-0"
+    ],
+    "maxDevices": 2,
+    "network": {
+      "enabled": true,
+      "wsUrl": "ws://127.0.0.1:9191",
+      "room": "midivj",
+      "retryMs": 1200
+    },
+    "mappings": {
+      "spawn_small": {
+        "type": "noteon",
+        "note": 11,
+        "ch": 5,
+        "key": "F1"
+      },
+      "spawn_big": {
+        "type": "noteon",
+        "note": 10,
+        "ch": 5,
+        "key": "F2"
+      },
+      "spawn_thrower": {
+        "type": "cc",
+        "note": 61,
+        "ch": 15,
+        "key": "F3"
+      },
+      "spawn_wave": {
+        "type": "noteon",
+        "note": 41,
+        "ch": 0,
+        "key": "F4"
+      },
+      "drop_health": {
+        "type": "cc",
+        "note": 62,
+        "ch": 15,
+        "key": "F5"
+      },
+      "boss_entry": {
+        "type": "noteon",
+        "note": 12,
+        "ch": 5,
+        "key": "¿"
+      },
+      "boss_laser": {
+        "type": "noteon",
+        "note": 10,
+        "ch": 5,
+        "key": "F7"
+      },
+      "boss_fire": {
+        "type": "noteon",
+        "note": 10,
+        "ch": 5,
+        "key": "F8"
+      },
+      "boss_slam": {
+        "type": "noteon",
+        "note": 10,
+        "ch": 5,
+        "key": "F9"
+      },
+      "boss_2nd_head": {
+        "type": "noteon",
+        "note": 55,
+        "ch": 0,
+        "key": "F10"
+      },
+      "flash_shake": {
+        "type": "noteon",
+        "note": 60,
+        "ch": 0,
+        "key": "F11"
+      },
+      "force_advance": {
+        "type": "noteon",
+        "note": 64,
+        "ch": 0,
+        "key": "-"
+      },
+      "enter_select": {
+        "type": "cc",
+        "note": 56,
+        "ch": 15,
+        "key": "enter"
+      },
+      "end_session": {
+        "type": "cc",
+        "note": 57,
+        "ch": 15,
+        "key": "backspace"
+      }
+    }
+  }
+}

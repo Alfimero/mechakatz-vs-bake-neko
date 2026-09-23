@@ -1,0 +1,11 @@
+services:
+  mechakatz-online:
+    build:
+      context: .
+      dockerfile: online_service/Dockerfile
+    env_file:
+      - online_service/.env
+    ports:
+      - "127.0.0.1:8787:8787"
+    restart: unless-stopped
+
