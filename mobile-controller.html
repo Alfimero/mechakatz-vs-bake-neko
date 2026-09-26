@@ -7,23 +7,36 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta id="themeColorMeta" name="theme-color" content="#06202a">
 <title>MechaKatz Cockpit</title>
 <style>
   :root{
     --bg:#06010d;
-    --panel:#0e1322;
-    --panel2:#121d33;
     --cyan:#00f0ff;
     --pink:#ff2e88;
     --yellow:#ffea00;
     --green:#00ff7f;
     --red:#ff5050;
-    --line:rgba(0,240,255,.2);
+    /* Color del piloto: applyPilotTheme los reescribe con el color del
+       personaje elegido (o el del slot P1..P4 mientras no hay datos). */
     --theme-main:#00f0ff;
-    --theme-accent:#ffea00;
-    --theme-body:#233b52;
-    --theme-line:rgba(0,240,255,.24);
-    --theme-glow:rgba(0,240,255,.18);
+    --theme-accent:#ffffff;
+    --theme-body:#00f0ff;
+    --theme-rgb:0,240,255;
+    --theme-deep:#00353a;
+    --theme-ink:#03070b;
+    --theme-line:rgba(0,240,255,.55);
+    --theme-glow:rgba(0,240,255,.32);
+    /* Tamano real de la ventana (lo fija JS; sirve para rotar el mando). */
+    --app-w:100vw;
+    --app-h:100vh;
+    /* Tamano del mando ya girado (ancho/alto con los que se maqueta). */
+    --shell-w:100vw;
+    --shell-h:100vh;
+    --safe-top:env(safe-area-inset-top,0px);
+    --safe-right:env(safe-area-inset-right,0px);
+    --safe-bottom:env(safe-area-inset-bottom,0px);
+    --safe-left:env(safe-area-inset-left,0px);
   }
   *{
     box-sizing:border-box;
@@ -42,138 +55,160 @@
     margin:0;
     width:100%;
     height:100%;
-    min-height:100dvh;
     overflow:hidden;
     background:
-      radial-gradient(circle at top,rgba(255,46,136,.15),transparent 28%),
-      radial-gradient(circle at bottom left,rgba(0,240,255,.12),transparent 34%),
-      linear-gradient(180deg,#12031e 0%,var(--bg) 100%);
+      radial-gradient(circle at top,rgba(var(--theme-rgb),.3),transparent 42%),
+      radial-gradient(circle at bottom,rgba(var(--theme-rgb),.2),transparent 48%),
+      linear-gradient(180deg,var(--theme-deep) 0%,var(--bg) 100%);
     color:#dffcff;
     font-family:Consolas,monospace;
     touch-action:none;
   }
-  body{
-    padding:max(6px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));
-    display:flex;
-    align-items:stretch;
-    justify-content:center;
-  }
+  button{font-family:inherit}
+
+  /* ============================================================
+     ESTRUCTURA: la pantalla principal es JUEGO (video + mando).
+     data-layout="portrait"  -> video arriba, mando abajo sin tocarse.
+     data-layout="landscape" -> palanca al borde izquierdo, video al
+                                centro, botones al borde derecho.
+     .rotate-cw / .rotate-ccw giran el mando cuando el formato elegido
+     no coincide con la orientacion del telefono.
+     ============================================================ */
   .shell{
-    width:min(980px,100%);
-    height:100%;
-    min-height:0;
+    position:fixed;
+    top:0;
+    left:0;
+    width:var(--app-w);
+    height:var(--app-h);
+    padding:max(6px,var(--safe-top)) max(8px,var(--safe-right)) max(8px,var(--safe-bottom)) max(8px,var(--safe-left));
     display:grid;
-    grid-template-columns:1.04fr .96fr;
-    grid-template-rows:auto auto minmax(0,1fr) auto;
+    gap:8px;
+    overflow:hidden;
+    /* Marco del color del piloto: identifica el celular de un vistazo. */
+    box-shadow:inset 0 0 0 3px var(--theme-main),inset 0 0 36px var(--theme-glow);
+  }
+  .shell.rotate-cw,
+  .shell.rotate-ccw{
+    width:var(--app-h);
+    height:var(--app-w);
+    padding:8px 10px;
+    transform-origin:top left;
+  }
+  .shell.rotate-cw{transform:translateX(var(--app-w)) rotate(90deg)}
+  .shell.rotate-ccw{transform:translateY(var(--app-h)) rotate(-90deg)}
+
+  .shell[data-layout="portrait"]{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    grid-template-rows:auto auto minmax(0,1fr);
     grid-template-areas:
       "top top"
-      "slots slots"
-      "dash controls"
-      "foot foot";
-    gap:6px;
+      "game game"
+      "stick buttons";
   }
-  .bar,
-  .panel,
-  .cluster,
-  .button{
-    border:1px solid var(--theme-line);
-    background:linear-gradient(180deg,var(--theme-body),rgba(7,12,22,.96));
-    box-shadow:inset 0 0 0 1px rgba(255,255,255,.04),0 0 22px var(--theme-glow);
+  /* Las columnas laterales toman solo lo que sobra despues de dar al juego
+     toda la altura disponible (16:9), con un minimo comodo para el pulgar. */
+  .shell[data-layout="landscape"]{
+    --side:clamp(140px, calc((var(--shell-w) - 40px - (var(--shell-h) - 58px) * 16 / 9) / 2), 236px);
+    grid-template-columns:var(--side) minmax(0,1fr) var(--side);
+    grid-template-rows:auto minmax(0,1fr);
+    grid-template-areas:
+      "stick top buttons"
+      "stick game buttons";
+    gap:8px 10px;
   }
-  .bar{
-    padding:8px 12px;
+
+  /* ---- Barra superior compacta ---- */
+  .topbar{
+    grid-area:top;
     display:flex;
     align-items:center;
-    gap:8px;
-    justify-content:space-between;
+    gap:6px;
+    min-width:0;
   }
-  #topBar{grid-area:top}
-  #slotBar{grid-area:slots}
-  .title{
-    color:var(--theme-accent);
-    font-weight:700;
-    letter-spacing:.12em;
+  .chip{
+    min-height:34px;
+    padding:6px 10px;
+    border:1px solid var(--theme-line);
+    border-radius:9px;
+    background:linear-gradient(180deg,rgba(var(--theme-rgb),.26),rgba(7,12,22,.92));
+    color:#dffcff;
+    font:700 11px Consolas,monospace;
+    letter-spacing:.08em;
     text-transform:uppercase;
-    font-size:13px;
+    white-space:nowrap;
+    cursor:pointer;
+  }
+  .chip.active{color:var(--theme-ink);background:var(--theme-main);border-color:var(--theme-main)}
+  .chip.status-chip{position:relative}
+  .chip.status-chip .caret{display:inline-block;margin-left:4px;transition:transform .18s}
+  .chip.status-chip[aria-expanded="true"] .caret{transform:rotate(180deg)}
+  .chip.status-chip.alert::after{
+    content:'';
+    position:absolute;
+    top:-3px;
+    right:-3px;
+    width:10px;
+    height:10px;
+    border-radius:50%;
+    background:var(--red);
+    box-shadow:0 0 10px var(--red);
+    animation:blink 1s steps(2,start) infinite;
+  }
+  @keyframes blink{to{visibility:hidden}}
+  .chip.audio-toggle.active{color:#020806;background:var(--green);border-color:var(--green)}
+  /* Placa del piloto (P1 · NOMBRE) pintada con su color. */
+  .pilot-badge{
+    flex:1 1 auto;
+    min-width:0;
+    padding:7px 8px;
+    border-radius:9px;
+    background:var(--theme-main);
+    color:var(--theme-ink);
+    box-shadow:0 0 18px var(--theme-glow);
+    font:700 12px Consolas,monospace;
+    letter-spacing:.06em;
+    text-align:center;
+    text-transform:uppercase;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
   }
   .status{
-    padding:5px 8px;
+    padding:6px 8px;
     border:1px solid currentColor;
+    border-radius:9px;
     color:var(--theme-main);
-    font-size:11px;
+    font-size:10px;
+    letter-spacing:.06em;
     text-transform:uppercase;
+    white-space:nowrap;
   }
   .status.on{color:var(--green)}
   .status.warn{color:var(--pink)}
-  .top-actions{
-    display:flex;
-    align-items:center;
-    justify-content:flex-end;
-    gap:8px;
-  }
-  .view-switch{
-    display:flex;
-    align-items:center;
-    gap:2px;
-    padding:2px;
-    border:1px solid var(--theme-line);
-    background:rgba(0,0,0,.34);
-  }
-  .view-button,
-  .audio-toggle{
-    border:1px solid transparent;
-    background:transparent;
-    color:#b9dce8;
-    font:700 10px Consolas,monospace;
-    letter-spacing:.06em;
-    text-transform:uppercase;
-    cursor:pointer;
-  }
-  .view-button{
-    min-height:28px;
-    padding:5px 8px;
-  }
-  .view-button.active{
-    color:#03070b;
-    background:var(--theme-accent);
-    border-color:var(--theme-accent);
-  }
-  .view-button:disabled{
-    cursor:not-allowed;
-    opacity:.36;
-  }
-  .slots{
-    display:flex;
-    gap:6px;
-    flex-wrap:wrap;
-  }
-  .slot{
-    padding:6px 8px;
-    border:1px solid var(--theme-line);
-    background:#091120;
-    color:var(--theme-main);
-    cursor:pointer;
-    font-size:12px;
-  }
-  .slot.active{
-    color:#000;
-    background:var(--theme-accent);
-    border-color:var(--theme-accent);
-  }
-  .slot.connected:not(.active)::before{content:'\25cf  ';color:var(--green)}
-  .slot.standby:not(.active)::before{content:'\25cf  ';color:var(--yellow)}
-  .slot.offline:not(.active)::before{content:'\25cf  ';color:#64788b}
-  .slot:disabled{cursor:default;opacity:.88}
+
+  /* ---- Pantalla del juego (16:9, nunca tapada por el mando) ---- */
   .game-view{
     grid-area:game;
-    display:none;
-    position:relative;
     min-width:0;
     min-height:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    container-type:size;
+  }
+  .shell[data-layout="portrait"] .game-view{container-type:normal}
+  .screen-frame{
+    position:relative;
+    width:100%;
+    aspect-ratio:16/9;
     overflow:hidden;
     border:1px solid var(--theme-line);
+    border-radius:10px;
     background:#010205;
     box-shadow:inset 0 0 0 1px rgba(255,255,255,.03),0 0 24px var(--theme-glow);
+  }
+  .shell[data-layout="landscape"] .screen-frame{
+    width:min(100cqw,calc(100cqh * 16 / 9));
   }
   .game-video{
     position:absolute;
@@ -188,183 +223,87 @@
     position:absolute;
     inset:0;
     display:grid;
-    place-items:center;
-    padding:20px;
-    color:#9ed7ff;
-    text-align:center;
-    text-transform:uppercase;
-    letter-spacing:.08em;
-    font-size:12px;
-    background:
-      radial-gradient(circle at center,rgba(0,240,255,.09),transparent 42%),
-      repeating-linear-gradient(0deg,transparent 0 14px,rgba(0,240,255,.025) 15px 16px);
-    pointer-events:none;
-  }
-  .game-view.video-live .video-placeholder{display:none}
-  .game-hud{
-    position:absolute;
-    z-index:1;
-    top:8px;
-    left:8px;
-    max-width:calc(100% - 130px);
-    padding:6px 8px;
-    border:1px solid rgba(0,240,255,.28);
-    background:rgba(1,5,10,.76);
-    color:#dffcff;
-    font-size:10px;
-    line-height:1.25;
-    pointer-events:none;
-  }
-  .audio-toggle{
-    position:absolute;
-    z-index:4;
-    top:8px;
-    right:8px;
-    min-height:32px;
-    padding:5px 8px;
-    border-color:rgba(255,255,255,.22);
-    background:rgba(1,5,10,.8);
-    pointer-events:auto;
-  }
-  .audio-toggle.active{color:#020806;background:var(--green);border-color:var(--green)}
-  .dash{
-    grid-area:dash;
-    display:grid;
-    grid-template-columns:1.04fr .96fr;
+    align-content:center;
+    justify-items:center;
     gap:8px;
-    min-height:0;
-  }
-  .panel{
-    padding:10px;
-    min-height:0;
-  }
-  .screen{
-    min-height:0;
-    display:grid;
-    grid-template-rows:auto auto 1fr auto;
-    gap:8px;
-    background:
-      linear-gradient(135deg,rgba(0,240,255,.08),transparent 44%),
-      linear-gradient(180deg,#09111d 0%,#04070d 100%);
-  }
-  .screen h2,
-  .systems h2{
-    margin:0;
-    color:var(--theme-main);
-    text-transform:uppercase;
-    letter-spacing:.08em;
-    font-size:15px;
-  }
-  .readout{
-    padding:8px;
-    border:1px solid rgba(255,255,255,.08);
-    background:rgba(0,0,0,.34);
-  }
-  .message{
-    min-height:38px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
+    padding:12px;
     text-align:center;
-    color:var(--yellow);
-    font-size:14px;
-    line-height:1.15;
-    letter-spacing:.06em;
-    text-transform:uppercase;
+    background:
+      radial-gradient(circle at center,rgba(var(--theme-rgb),.14),transparent 46%),
+      repeating-linear-gradient(0deg,transparent 0 14px,rgba(var(--theme-rgb),.04) 15px 16px);
   }
-  .row{
-    display:grid;
-    grid-template-columns:58px 1fr 42px;
-    gap:6px;
-    align-items:center;
-    margin-top:6px;
-    font-size:11px;
-  }
-  .row:first-child{margin-top:0}
-  .meter{
-    height:8px;
-    border:1px solid rgba(255,255,255,.08);
-    background:#02050b;
-    overflow:hidden;
-  }
-  .fill{
+  .screen-frame.video-live .video-placeholder{display:none}
+  /* Escaner de digitalizacion: cubre el marco durante la seleccion. */
+  .scan-view{
+    position:absolute;
+    inset:0;
+    z-index:2;
+    width:100%;
     height:100%;
-    width:0%;
-    background:var(--cyan);
-  }
-  .hp .fill{background:linear-gradient(90deg,var(--green),#76ff9d)}
-  .shield .fill{background:linear-gradient(90deg,var(--cyan),#7ef6ff)}
-  .special .fill{background:linear-gradient(90deg,var(--yellow),#ffbd3f)}
-  .flight .fill{background:linear-gradient(90deg,var(--pink),#ffea00)}
-  .repair .fill{background:linear-gradient(90deg,var(--yellow),var(--red))}
-  .systems{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    align-content:start;
-    gap:6px;
-  }
-  .systems h2{grid-column:1/-1}
-  .stat{
-    padding:8px;
-    border:1px solid rgba(255,255,255,.08);
-    background:rgba(0,0,0,.28);
-    font-size:11px;
-    line-height:1.2;
-    overflow:hidden;
-  }
-  .stat strong{
     display:block;
-    color:var(--yellow);
-    margin-bottom:3px;
-    text-transform:uppercase;
-    font-size:11px;
+    background:#030713;
   }
-  .stat span{
-    display:block;
-    overflow:hidden;
-    text-overflow:ellipsis;
-  }
-  .controls{
-    grid-area:controls;
-    display:grid;
-    grid-template-columns:1fr;
-    grid-template-rows:1fr 1fr;
-    gap:6px;
-    min-height:0;
-  }
-  .cluster{
-    padding:10px;
-    display:grid;
-    gap:8px;
-    min-height:0;
-  }
-  .cluster h3{
-    margin:0;
+  .scan-view[hidden]{display:none}
+  .mini-pilot{
     color:var(--theme-main);
-    font-size:12px;
-    text-transform:uppercase;
+    font-weight:700;
+    font-size:13px;
     letter-spacing:.08em;
+    text-transform:uppercase;
   }
-  .joystick-cluster{
-    grid-template-rows:auto 1fr auto;
+  .mini-bars{display:grid;gap:5px;width:min(78%,300px)}
+  .mini-bar{display:grid;grid-template-columns:44px 1fr;gap:6px;align-items:center;font-size:10px;color:#9ed7ff}
+  .mini-message{color:var(--yellow);font-size:11px;letter-spacing:.06em;text-transform:uppercase;line-height:1.2}
+  .video-note{color:#9ed7ff;font-size:10px;letter-spacing:.06em;text-transform:uppercase;opacity:.85}
+  .video-enable{
+    min-height:32px;
+    padding:6px 12px;
+    border:1px solid var(--green);
+    border-radius:8px;
+    background:rgba(0,255,127,.12);
+    color:var(--green);
+    font:700 11px Consolas,monospace;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    cursor:pointer;
   }
-  .action-cluster{
-    grid-template-rows:auto 1fr;
+  .video-enable[hidden]{display:none}
+
+  /* ---- Mando: palanca y botones ---- */
+  .stick-zone,
+  .button-zone{
+    min-width:0;
+    min-height:0;
+    border:1px solid var(--theme-line);
+    border-radius:14px;
+    background:linear-gradient(180deg,rgba(var(--theme-rgb),.2),rgba(4,7,13,.88));
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.04),0 0 20px var(--theme-glow);
+    padding:8px;
+  }
+  /* Palanca pegada abajo: queda al alcance del pulgar en ambos formatos. */
+  .stick-zone{
+    grid-area:stick;
+    display:flex;
+    align-items:flex-end;
+    justify-content:center;
+    padding-bottom:12px;
+    container-type:size;
   }
   .joystick-pad{
     position:relative;
-    min-height:min(34vh,250px);
+    width:min(100cqw,100cqh);
     aspect-ratio:1/1;
     border:1px solid var(--theme-line);
     border-radius:22px;
     overflow:hidden;
     background:
-      radial-gradient(circle at center,rgba(0,240,255,.1),transparent 42%),
+      radial-gradient(circle at center,rgba(var(--theme-rgb),.18),transparent 42%),
       linear-gradient(180deg,rgba(0,0,0,.26),rgba(0,0,0,.52));
+    touch-action:none;
   }
   .joystick-base{
     position:absolute;
-    inset:14% 14%;
+    inset:12%;
     border-radius:50%;
     border:2px solid var(--theme-line);
     box-shadow:inset 0 0 28px var(--theme-glow);
@@ -375,25 +314,13 @@
     position:absolute;
     background:var(--theme-line);
   }
-  .joystick-base::before{
-    left:50%;
-    top:10%;
-    bottom:10%;
-    width:1px;
-    transform:translateX(-50%);
-  }
-  .joystick-base::after{
-    top:50%;
-    left:10%;
-    right:10%;
-    height:1px;
-    transform:translateY(-50%);
-  }
+  .joystick-base::before{left:50%;top:10%;bottom:10%;width:1px;transform:translateX(-50%)}
+  .joystick-base::after{top:50%;left:10%;right:10%;height:1px;transform:translateY(-50%)}
   .joystick-stick{
     position:absolute;
     left:50%;
     top:50%;
-    width:34%;
+    width:36%;
     aspect-ratio:1/1;
     border-radius:50%;
     border:2px solid rgba(255,255,255,.12);
@@ -404,9 +331,7 @@
     transform:translate(-50%,-50%);
     transition:transform .04s linear, box-shadow .08s linear;
   }
-  .joystick-pad.active .joystick-stick{
-    box-shadow:0 0 36px var(--theme-accent), inset 0 -8px 18px rgba(0,0,0,.28);
-  }
+  .joystick-pad.active .joystick-stick{box-shadow:0 0 36px var(--theme-main), inset 0 -8px 18px rgba(0,0,0,.28)}
   .joystick-labels{
     position:absolute;
     inset:0;
@@ -417,278 +342,1537 @@
     text-transform:uppercase;
   }
   .joystick-labels span{position:absolute}
-  .joystick-labels .top{top:10px;left:50%;transform:translateX(-50%)}
-  .joystick-labels .bottom{bottom:10px;left:50%;transform:translateX(-50%)}
-  .joystick-labels .left{left:10px;top:50%;transform:translateY(-50%)}
-  .joystick-labels .right{right:10px;top:50%;transform:translateY(-50%)}
-  .action-grid{
+  .joystick-labels .top{top:6px;left:50%;transform:translateX(-50%)}
+  .joystick-labels .bottom{bottom:6px;left:50%;transform:translateX(-50%)}
+  .joystick-labels .left{left:6px;top:50%;transform:translateY(-50%)}
+  .joystick-labels .right{right:6px;top:50%;transform:translateY(-50%)}
+  .button-zone{
+    grid-area:buttons;
     display:grid;
-    grid-template-columns:repeat(2,minmax(0,1fr));
-    grid-auto-rows:1fr;
+    grid-template-rows:1.45fr 1fr;
     gap:8px;
-    min-height:0;
   }
   .button{
-    min-height:140px;
+    min-height:0;
     padding:6px;
+    border:2px solid var(--theme-line);
     border-radius:14px;
+    background:linear-gradient(180deg,rgba(var(--theme-rgb),.46),rgba(var(--theme-rgb),.12) 70%,rgba(7,12,22,.9));
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.06),0 0 18px var(--theme-glow);
     color:#e7fbff;
     display:flex;
     align-items:center;
     justify-content:center;
     text-align:center;
     font-weight:700;
-    letter-spacing:.08em;
+    letter-spacing:.1em;
     text-transform:uppercase;
-    user-select:none;
-    font-size:18px;
+    font-size:clamp(13px,4.2vw,20px);
     line-height:1.1;
+    touch-action:none;
   }
-  .button.wide{grid-column:1/-1}
-  .button[data-action="flight"]{border-color:rgba(255,46,136,.34)}
-  .button.attack{border-color:rgba(255,234,0,.3)}
-  .button.guard{border-color:rgba(0,240,255,.3)}
-  .button.system{border-color:rgba(0,255,127,.3)}
-  .button.active{
-    background:linear-gradient(180deg,rgba(255,234,0,.96),rgba(255,136,0,.9));
-    color:#000;
-    box-shadow:0 0 24px rgba(255,234,0,.28);
-  }
-  .button.system.active{
-    background:linear-gradient(180deg,rgba(0,255,127,.95),rgba(0,171,122,.92));
-  }
-  .button.guard.active{
-    background:linear-gradient(180deg,rgba(0,240,255,.95),rgba(0,135,255,.92));
-  }
-  .button.attack.active{
-    background:linear-gradient(180deg,rgba(255,46,136,.95),rgba(255,175,0,.92));
-  }
-  .button.blank{
-    background:transparent;
-    border-color:transparent;
-    box-shadow:none;
-  }
-  .note-mini{
-    color:#9ed7ff;
-    font-size:10px;
-    line-height:1.2;
-    opacity:.8;
-  }
-  .foot{
-    grid-area:foot;
-    padding:8px 10px;
-    color:#abd6ff;
-    font-size:11px;
-    line-height:1.25;
-  }
-  @media (max-width:620px){
-    .title{font-size:12px}
-    #stageTag{
-      max-width:40%;
-      text-align:right;
-      font-size:11px;
-      line-height:1.15;
-    }
-    .dash{grid-template-columns:1.05fr .95fr}
-    .button{min-height:min(16vw,72px)}
-    .joystick-pad{min-height:min(44vw,220px)}
-  }
-  @media (max-width:420px), (max-height:760px){
-    .shell{gap:6px}
-    .bar{padding:8px 10px}
-    .title{font-size:11px}
-    .status{font-size:10px;padding:4px 7px}
-    .slot{font-size:11px;padding:5px 7px}
-    .panel{padding:8px}
-    .screen h2,.systems h2{font-size:13px}
-    .readout{padding:6px}
-    .message{min-height:30px;font-size:12px}
-    .row{grid-template-columns:50px 1fr 36px;font-size:10px;gap:5px;margin-top:5px}
-    .meter{height:7px}
-    .stat{padding:6px;font-size:10px}
-    .stat strong{font-size:10px}
-    .cluster{padding:8px}
-    .cluster h3{font-size:11px}
-    .action-grid{gap:5px}
-    .joystick-pad{min-height:min(43vw,180px);border-radius:18px}
-    .joystick-stick{width:36%}
-    .button{min-height:min(15vw,62px);font-size:11px;border-radius:10px}
-    .foot{padding:6px 8px;font-size:10px;line-height:1.15}
-  }
-  @media (max-height:700px){
-    .systems .stat:last-child{display:none}
-    .foot{display:none}
-  }
-  @media (max-width:760px){
-    .shell{
-      width:100%;
-    }
-  }
-  @media (orientation:portrait){
-    .shell{
-      grid-template-columns:1fr;
-      grid-template-rows:auto auto auto auto auto;
-      grid-template-areas:
-        "top"
-        "slots"
-        "dash"
-        "controls"
-        "foot";
-      gap:6px;
-    }
-    .dash{grid-template-columns:1fr}
-    .controls{grid-template-columns:1.08fr .92fr;grid-template-rows:none}
-    .joystick-pad{min-height:min(42vw,220px)}
-  }
-  .shell.view-stream{
-    position:relative;
-    grid-template-columns:1fr;
-    grid-template-rows:auto auto minmax(0,1fr);
-    grid-template-areas:
-      "top"
-      "slots"
-      "game";
-  }
-  .shell.view-stream .game-view{display:block}
-  .shell.view-stream .dash,
-  .shell.view-stream .foot{display:none}
-  .shell.view-stream .controls{
-    grid-area:game;
-    z-index:2;
-    grid-template-columns:minmax(150px,1fr) minmax(116px,.7fr);
-    grid-template-rows:1fr;
-    align-items:end;
-    gap:clamp(8px,4vw,44px);
-    padding:clamp(8px,2vw,18px);
+  .button.attack{border-color:var(--theme-main)}
+  .button.system{border-color:var(--theme-accent)}
+  .button.active{color:var(--theme-ink);background:var(--theme-main);box-shadow:0 0 28px var(--theme-main)}
+  .shell[data-layout="landscape"] .button{font-size:clamp(12px,1.9vw,19px)}
+
+  /* ---- Menu ESTADO: se despliega desde arriba sobre el juego ---- */
+  .drawer-scrim{
+    position:absolute;
+    inset:0;
+    z-index:19;
+    background:rgba(0,0,0,.45);
+    opacity:0;
     pointer-events:none;
+    transition:opacity .2s;
   }
-  .shell.view-stream .cluster{
-    align-self:end;
-    pointer-events:auto;
-    background:linear-gradient(180deg,rgba(14,19,34,.38),rgba(4,7,13,.72));
-    backdrop-filter:blur(2px);
+  .drawer{
+    position:absolute;
+    z-index:20;
+    top:0;
+    left:0;
+    right:0;
+    max-height:86%;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    padding:10px 12px 14px;
+    border-bottom:2px solid var(--theme-main);
+    border-radius:0 0 16px 16px;
+    background:linear-gradient(180deg,#0c1426 0%,#06080f 100%);
+    box-shadow:0 12px 40px rgba(0,0,0,.6),0 0 30px var(--theme-glow);
+    transform:translateY(-105%);
+    transition:transform .22s ease;
+    touch-action:pan-y;
   }
-  .shell.view-stream .joystick-cluster{
-    justify-self:start;
-    width:min(42vw,300px);
-    grid-template-rows:auto 1fr;
+  .drawer *{touch-action:pan-y}
+  .shell.drawer-open .drawer{transform:translateY(0)}
+  .shell.drawer-open .drawer-scrim{opacity:1;pointer-events:auto}
+  .drawer-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .drawer-head h2{
+    margin:0;
+    flex:1;
+    color:var(--theme-main);
+    font-size:14px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
   }
-  .shell.view-stream .joystick-pad{
-    width:100%;
-    min-height:0;
-    aspect-ratio:1/1;
+  .drawer-section{
+    margin-top:8px;
+    padding:8px;
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:10px;
+    background:rgba(0,0,0,.3);
   }
-  .shell.view-stream .joystick-cluster .note-mini,
-  .shell.view-stream .cluster h3{display:none}
-  .shell.view-stream .action-cluster{
-    justify-self:end;
-    width:min(32vw,230px);
-    min-height:min(45vh,310px);
-    grid-template-rows:1fr;
+  .drawer-section h3{
+    margin:0 0 6px;
+    color:var(--theme-main);
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
   }
-  .shell.view-stream .action-grid{
-    grid-template-columns:1fr;
-    grid-template-rows:1.35fr .8fr;
+  .drawer-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
+  .slots{display:flex;gap:6px;flex-wrap:wrap}
+  .slot{
+    padding:6px 8px;
+    border:1px solid var(--theme-line);
+    border-radius:8px;
+    background:#091120;
+    color:var(--theme-main);
+    cursor:pointer;
+    font-size:12px;
   }
-  .shell.view-stream .button{
-    min-height:72px;
-    background:linear-gradient(180deg,rgba(35,59,82,.86),rgba(7,12,22,.86));
+  .slot.active{color:var(--theme-ink);background:var(--theme-main);border-color:var(--theme-main)}
+  .slot.connected:not(.active)::before{content:'\25cf  ';color:var(--green)}
+  .slot.standby:not(.active)::before{content:'\25cf  ';color:var(--yellow)}
+  .slot.offline:not(.active)::before{content:'\25cf  ';color:#64788b}
+  .slot:disabled{cursor:default;opacity:.88}
+  .stage-tag{margin-top:6px;color:#dffcff;font-size:12px;letter-spacing:.06em}
+  .segmented{display:flex;gap:4px;flex-wrap:wrap}
+  .segmented .chip{min-height:30px;padding:5px 9px;font-size:10px}
+  .chip:disabled{opacity:.35;cursor:not-allowed}
+  .option-row{display:grid;grid-template-columns:92px 1fr;gap:8px;align-items:center;margin-top:6px;font-size:11px;color:#9ed7ff}
+  .option-row:first-of-type{margin-top:0}
+  .readout{display:grid;gap:5px}
+  .row{
+    display:grid;
+    grid-template-columns:56px 1fr 52px;
+    gap:6px;
+    align-items:center;
+    font-size:11px;
   }
-  @media (max-width:560px){
-    .top-actions{gap:5px}
-    .view-button{padding:4px 6px;font-size:9px}
-    .shell.view-stream .controls{gap:8px;padding:7px}
-    .shell.view-stream .joystick-cluster{width:min(45vw,220px)}
-    .shell.view-stream .action-cluster{width:min(34vw,170px);min-height:min(38vh,250px)}
-    .shell.view-stream .button{min-height:60px;font-size:12px}
+  .meter{
+    height:8px;
+    border:1px solid rgba(255,255,255,.08);
+    background:#02050b;
+    overflow:hidden;
+  }
+  .fill{height:100%;width:0%;background:var(--cyan)}
+  .hp .fill{background:linear-gradient(90deg,var(--green),#76ff9d)}
+  .shield .fill{background:linear-gradient(90deg,var(--cyan),#7ef6ff)}
+  .special .fill{background:linear-gradient(90deg,var(--yellow),#ffbd3f)}
+  .flight .fill{background:linear-gradient(90deg,var(--pink),#ffea00)}
+  .repair .fill{background:linear-gradient(90deg,var(--yellow),var(--red))}
+  .message{
+    margin-top:6px;
+    color:var(--yellow);
+    font-size:12px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    line-height:1.2;
+  }
+  .telemetry{margin-top:4px;font-size:10px;color:#abd6ff}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .stat{font-size:11px;line-height:1.2;overflow:hidden}
+  .stat strong{display:block;color:var(--yellow);margin-bottom:2px;text-transform:uppercase;font-size:10px}
+  .stat span{display:block;overflow-wrap:anywhere}
+  .help{font-size:10px;line-height:1.3;color:#abd6ff}
+  .help div + div{margin-top:4px}
+
+  @media (max-width:380px){
+    .chip{padding:6px 8px;font-size:10px}
+    .status{font-size:9px}
   }
 </style>
 </head>
 <body>
-  <div class="shell">
-    <div id="topBar" class="bar">
-      <div class="title">Mecha Cockpit Link</div>
-      <div class="top-actions">
-        <div class="view-switch" role="group" aria-label="Vista del controlador">
-          <button id="viewController" class="view-button active" type="button" data-view="controller">Estado</button>
-          <button id="viewStream" class="view-button" type="button" data-view="stream" disabled>Juego</button>
+  <div id="shell" class="shell" data-layout="portrait">
+    <header id="topBar" class="topbar">
+      <button id="statusToggle" class="chip status-chip" type="button" aria-expanded="false" aria-controls="statusDrawer">Estado<span class="caret">&#9662;</span></button>
+      <button id="layoutToggle" class="chip" type="button" title="Formato del mando">Auto</button>
+      <div id="pilotBadge" class="pilot-badge">P1</div>
+      <button id="audioToggle" class="chip audio-toggle" type="button" aria-pressed="false">Audio off</button>
+      <div id="status" class="status warn" aria-live="polite">Offline</div>
+    </header>
+
+    <section id="gameView" class="game-view" aria-label="Juego transmitido">
+      <div id="screenFrame" class="screen-frame">
+        <video id="gameVideo" class="game-video" autoplay playsinline muted></video>
+        <canvas id="scanView" class="scan-view" hidden aria-label="Escaner del mecha elegido"></canvas>
+        <div class="video-placeholder">
+          <div id="miniPilot" class="mini-pilot">Pilot Link</div>
+          <div class="mini-bars">
+            <div class="mini-bar hp"><span>Hull</span><div class="meter"><div id="miniHpFill" class="fill"></div></div></div>
+            <div class="mini-bar special"><span>Core</span><div class="meter"><div id="miniCoreFill" class="fill"></div></div></div>
+          </div>
+          <div id="miniMessage" class="mini-message">Awaiting uplink</div>
+          <div id="videoPlaceholder" class="video-note">Esperando video del anfitrion</div>
+          <button id="videoEnable" class="video-enable" type="button" hidden>Activar video</button>
         </div>
-        <div id="status" class="status warn" aria-live="polite">Offline</div>
       </div>
-    </div>
-
-    <div id="slotBar" class="bar">
-      <div class="slots">
-        <button class="slot" data-slot="0">Pilot P1</button>
-        <button class="slot" data-slot="1">Pilot P2</button>
-        <button class="slot" data-slot="2">Pilot P3</button>
-        <button class="slot" data-slot="3">Pilot P4</button>
-      </div>
-      <div id="stageTag">Awaiting host</div>
-    </div>
-
-    <section id="gameView" class="game-view" aria-hidden="true">
-      <video id="gameVideo" class="game-video" autoplay playsinline muted></video>
-      <div id="videoPlaceholder" class="video-placeholder">Esperando video del anfitrion</div>
-      <div id="gameHud" class="game-hud">Sin telemetria</div>
-      <button id="audioToggle" class="audio-toggle" type="button" aria-pressed="false">Audio off</button>
     </section>
 
-    <div class="dash">
-      <section class="panel screen">
-        <h2 id="pilotName">Pilot Link</h2>
-        <div class="readout">
-          <div class="row hp"><span>Hull</span><div class="meter"><div id="hpFill" class="fill"></div></div><span id="hpText">0/0</span></div>
-          <div class="row shield"><span>Shield</span><div class="meter"><div id="shieldFill" class="fill"></div></div><span id="shieldText">0/0</span></div>
-          <div class="row special"><span>Core</span><div class="meter"><div id="specialFill" class="fill"></div></div><span id="specialText">0/0</span></div>
-          <div class="row flight"><span>Boost</span><div class="meter"><div id="flightFill" class="fill"></div></div><span id="flightText">0%</span></div>
-          <div class="row repair"><span>Repair</span><div class="meter"><div id="repairFill" class="fill"></div></div><span id="repairText">OK</span></div>
+    <section class="stick-zone" aria-label="Palanca">
+      <div id="joystickPad" class="joystick-pad">
+        <div class="joystick-base"></div>
+        <div class="joystick-labels">
+          <span class="top">Up</span>
+          <span class="left">Left</span>
+          <span class="right">Right</span>
+          <span class="bottom">Down</span>
         </div>
-        <div id="message" class="message">Awaiting uplink</div>
-        <div class="readout" id="telemetry">No telemetry yet.</div>
-      </section>
+        <div id="joystickStick" class="joystick-stick"></div>
+      </div>
+    </section>
 
-      <section class="panel systems">
-        <h2>Systems</h2>
-        <div class="stat"><strong>Boss</strong><span id="bossStatus">No target</span></div>
-        <div class="stat"><strong>Host</strong><span id="hostStatus">Waiting for MechaKatz VS Bake-Neko!</span></div>
-        <div class="stat"><strong>Warnings</strong><span id="warningStatus">No active alerts.</span></div>
-        <div class="stat"><strong>Slot URL</strong><span id="slotUrl">-</span></div>
-      </section>
-    </div>
+    <section class="button-zone" aria-label="Botones">
+      <button class="button attack" data-action="light">Strike</button>
+      <button class="button system" data-action="special">System</button>
+    </section>
 
-    <div id="controls" class="controls">
-      <section class="cluster joystick-cluster">
-        <h3>Vector / Lane</h3>
-        <div id="joystickPad" class="joystick-pad">
-          <div class="joystick-base"></div>
-          <div class="joystick-labels">
-            <span class="top">Up</span>
-            <span class="left">Left</span>
-            <span class="right">Right</span>
-            <span class="bottom">Down</span>
+    <div id="drawerScrim" class="drawer-scrim"></div>
+    <aside id="statusDrawer" class="drawer" aria-hidden="true" aria-label="Estado">
+      <div class="drawer-head">
+        <h2>Estado</h2>
+        <button id="drawerClose" class="chip" type="button">Cerrar &#10005;</button>
+      </div>
+
+      <div class="drawer-section">
+        <h3>Pilotos</h3>
+        <div class="slots">
+          <button class="slot" data-slot="0">Pilot P1</button>
+          <button class="slot" data-slot="1">Pilot P2</button>
+          <button class="slot" data-slot="2">Pilot P3</button>
+          <button class="slot" data-slot="3">Pilot P4</button>
+        </div>
+        <div id="stageTag" class="stage-tag">Awaiting host</div>
+      </div>
+
+      <div class="drawer-section">
+        <h3>Pantalla</h3>
+        <div class="option-row">
+          <span>Video</span>
+          <div class="segmented">
+            <button id="videoOn" class="chip" type="button" data-video="stream">Con video</button>
+            <button id="videoOff" class="chip" type="button" data-video="controller">Solo mando</button>
           </div>
-          <div id="joystickStick" class="joystick-stick"></div>
         </div>
-        <div class="note-mini">Palanca tactil para desplazarte libremente y acomodarte en la linea del beat'em up.</div>
-      </section>
-
-      <section class="cluster action-cluster">
-        <h3>Weapons / Systems</h3>
-        <div class="action-grid">
-          <button class="button attack" data-action="light">Strike</button>
-          <button class="button system" data-action="special">System</button>
+        <div class="option-row">
+          <span>Formato</span>
+          <div class="segmented">
+            <button class="chip" type="button" data-layout-option="auto">Auto</button>
+            <button class="chip" type="button" data-layout-option="portrait">Vertical</button>
+            <button class="chip" type="button" data-layout-option="landscape">Horizontal</button>
+          </div>
         </div>
-      </section>
-    </div>
+      </div>
 
-    <div class="panel foot">
-      <div><strong>Strike</strong>: 3 golpes rapidos encadenan un crash en el 4to. Tambien revive al companero caido si estas a su lado.</div>
-      <div><strong>System</strong>: activa el especial cuando tu medidor esta lleno.</div>
-      <div>Mover la palanca hacia arriba = saltar. Doble tap arriba en el aire = vuelo (cuesta HP).</div>
-    </div>
+      <div class="drawer-grid">
+        <div class="drawer-section">
+          <h3 id="pilotName">Pilot Link</h3>
+          <div class="readout">
+            <div class="row hp"><span>Hull</span><div class="meter"><div id="hpFill" class="fill"></div></div><span id="hpText">0/0</span></div>
+            <div class="row shield"><span>Shield</span><div class="meter"><div id="shieldFill" class="fill"></div></div><span id="shieldText">0/0</span></div>
+            <div class="row special"><span>Core</span><div class="meter"><div id="specialFill" class="fill"></div></div><span id="specialText">0/0</span></div>
+            <div class="row flight"><span>Boost</span><div class="meter"><div id="flightFill" class="fill"></div></div><span id="flightText">0%</span></div>
+            <div class="row repair"><span>Repair</span><div class="meter"><div id="repairFill" class="fill"></div></div><span id="repairText">OK</span></div>
+          </div>
+          <div id="message" class="message">Awaiting uplink</div>
+          <div id="telemetry" class="telemetry">No telemetry yet.</div>
+        </div>
+
+        <div class="drawer-section">
+          <h3>Systems</h3>
+          <div class="stats">
+            <div class="stat"><strong>Boss</strong><span id="bossStatus">No target</span></div>
+            <div class="stat"><strong>Host</strong><span id="hostStatus">Waiting for MechaKatz VS Bake-Neko!</span></div>
+            <div class="stat"><strong>Warnings</strong><span id="warningStatus">No active alerts.</span></div>
+            <div class="stat"><strong>Slot URL</strong><span id="slotUrl">-</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="drawer-section help">
+        <div><strong>Strike</strong>: 3 golpes rapidos encadenan un crash en el 4to. Tambien revive al companero caido si estas a su lado.</div>
+        <div><strong>System</strong>: activa el especial cuando tu medidor esta lleno.</div>
+        <div>Palanca: mueve al mecha por el carril. El formato Horizontal muestra el juego completo con la palanca y los botones en los bordes.</div>
+      </div>
+    </aside>
   </div>
 
+<script>
+'use strict';
+// Arte HD de los mechas, copiado del juego para el escaner de seleccion.
+/* <mecha-art> GENERADO por build_config_editor.js desde el juego: no editar a mano */
+const TAU = Math.PI * 2;
+function clamp(value, min, max){ return Math.max(min, Math.min(max, value)); }
+
+function safeHexColor(value, fallback){
+  return typeof value === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(value.trim()) ? value.trim() : fallback;
+}
+
+function shadeHex(hex, factor){
+  const clean = safeHexColor(hex, '#808080').replace('#', '');
+  const full = clean.length === 3 ? clean.split('').map(ch => ch + ch).join('') : clean.slice(0, 6);
+  const value = parseInt(full, 16) || 0;
+  const channel = shift => clamp(Math.round(((value >> shift) & 255) * factor), 0, 255);
+  return `#${[channel(16), channel(8), channel(0)].map(v => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+let spriteSnap = null;
+// Caja de lo dibujado dentro de drawEntityHD, en pixeles de su lienzo, para
+// que el pase HD procese solo esa zona (ver hdTrackRect).
+let hdTrack = null;
+function withSpriteScale(ax, ay, scale, draw){
+  if(!(scale > 0) || scale === 1){
+    draw();
+    return;
+  }
+  const outer = spriteSnap;
+  let devX, devY, localX, localY;
+  if(outer){
+    devX = outer.dx + Math.round((ax - outer.ax) * outer.s);
+    devY = outer.dy + Math.round((ay - outer.ay) * outer.s);
+    localX = outer.ax + (devX - outer.dx) / outer.s;
+    localY = outer.ay + (devY - outer.dy) / outer.s;
+  } else {
+    devX = localX = Math.round(ax);
+    devY = localY = Math.round(ay);
+  }
+  ctx.save();
+  ctx.translate(localX, localY);
+  ctx.scale(scale, scale);
+  ctx.translate(-localX, -localY);
+  spriteSnap = { ax:localX, ay:localY, dx:devX, dy:devY, s:(outer ? outer.s : 1) * scale };
+  try {
+    draw();
+  } finally {
+    spriteSnap = outer;
+    ctx.restore();
+  }
+}
+// Escala del sprite que se esta dibujando (1 fuera de withSpriteScale). Los
+// efectos que marcan distancias reales del juego (anillos de aviso, lenguas,
+// vendas) la dividen para conservar su alcance verdadero en pantalla.
+function spriteDrawScale(){
+  return spriteSnap ? spriteSnap.s : 1;
+}
+function hdTrackRect(x0, y0, x1, y1){
+  const track = hdTrack;
+  const left = Math.min(x0, x1) + track.ox;
+  const right = Math.max(x0, x1) + track.ox;
+  const top = Math.min(y0, y1) + track.oy;
+  const bottom = Math.max(y0, y1) + track.oy;
+  if(left < track.minX) track.minX = left;
+  if(top < track.minY) track.minY = top;
+  if(right > track.maxX) track.maxX = right;
+  if(bottom > track.maxY) track.maxY = bottom;
+}
+function fillPixels(x, y, w, h){
+  if(!spriteSnap){
+    ctx.fillRect(x, y, w, h);
+    if(hdTrack) hdTrackRect(x, y, x + w, y + h);
+    return;
+  }
+  const { ax, ay, dx, dy, s } = spriteSnap;
+  const x0 = Math.round((x - ax) * s);
+  const x1 = Math.round((x + w - ax) * s);
+  const y0 = Math.round((y - ay) * s);
+  const y1 = Math.round((y + h - ay) * s);
+  ctx.fillRect(ax + x0 / s, ay + y0 / s, (x1 - x0) / s, (y1 - y0) / s);
+  if(hdTrack) hdTrackRect(dx + x0, dy + y0, dx + x1, dy + y1);
+}
+function px(x, y, color, w = 1, h = 1){
+  ctx.fillStyle = color;
+  fillPixels(Math.round(x), Math.round(y), w, h);
+}
+function rect(x, y, w, h, color){
+  ctx.fillStyle = color;
+  fillPixels(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+}
+// ============================================================
+// PASE HD (definicion estilo Metal Slug sobre el pixel-art)
+// hdEnhanceSprite: contorno oscuro de 1px teñido del color vecino, luz de
+// 1px en el borde superior de cada region de color y sombra de 1px en el
+// inferior (mas suaves en los costados). Solo toca pixeles opacos: sombras,
+// auras y destellos translucidos quedan intactos y los detalles de 1px de
+// alto no se recolorean.
+// hdEnhanceScenery: igual pero sin contorno y mas suave, con grano en el
+// interior de cada region y una oclusion tramada (Bayer 4x4) hacia la base.
+// Trabajan sobre ImageData (Uint32 0xAABBGGRR) y no dependen del juego.
+// ============================================================
+const HD_BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+function hdLift(c, t){
+  const r = c & 255;
+  const g = (c >>> 8) & 255;
+  const b = (c >>> 16) & 255;
+  return (c & 0xff000000) | (Math.round(b + (255 - b) * t) << 16) | (Math.round(g + (255 - g) * t) << 8) | Math.round(r + (255 - r) * t);
+}
+function hdDim(c, mul){
+  return (c & 0xff000000) | (Math.round(((c >>> 16) & 255) * mul) << 16) | (Math.round(((c >>> 8) & 255) * mul) << 8) | Math.round((c & 255) * mul);
+}
+function hdOutlineOf(c){
+  const r = Math.round((c & 255) * 0.26 + 8);
+  const g = Math.round(((c >>> 8) & 255) * 0.26 + 6);
+  const b = Math.round(((c >>> 16) & 255) * 0.26 + 18);
+  return 0xff000000 | (b << 16) | (g << 8) | r;
+}
+function hdHash(x, y, seed){
+  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(seed | 0, 1103515245)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function hdEnhanceSprite(image, options = {}){
+  const w = image.width;
+  const h = image.height;
+  const out = new Uint32Array(image.data.buffer, image.data.byteOffset, w * h);
+  const src = out.slice();
+  const light = options.light ?? 0.26;
+  const shade = options.shade ?? 0.68;
+  const sideLight = options.sideLight ?? 0.1;
+  const sideShade = options.sideShade ?? 0.86;
+  const outline = options.outline !== false;
+  for(let y = 0; y < h; y++){
+    const row = y * w;
+    for(let x = 0; x < w; x++){
+      const i = row + x;
+      const c = src[i];
+      const a = c >>> 24;
+      if(a >= 200){
+        const rgb = c & 0xffffff;
+        const up = y > 0 ? src[i - w] : 0;
+        const dn = y < h - 1 ? src[i + w] : 0;
+        const lf = x > 0 ? src[i - 1] : 0;
+        const rt = x < w - 1 ? src[i + 1] : 0;
+        const sameUp = (up >>> 24) >= 200 && (up & 0xffffff) === rgb;
+        const sameDown = (dn >>> 24) >= 200 && (dn & 0xffffff) === rgb;
+        const sameLeft = (lf >>> 24) >= 200 && (lf & 0xffffff) === rgb;
+        const sameRight = (rt >>> 24) >= 200 && (rt & 0xffffff) === rgb;
+        if(!sameUp && sameDown) out[i] = hdLift(c, light);
+        else if(!sameDown && sameUp) out[i] = hdDim(c, shade);
+        else if(!sameLeft && sameRight) out[i] = hdLift(c, sideLight);
+        else if(!sameRight && sameLeft) out[i] = hdDim(c, sideShade);
+      } else if(outline && a < 128){
+        let n = 0;
+        if(y < h - 1 && (src[i + w] >>> 24) >= 200) n = src[i + w];
+        else if(y > 0 && (src[i - w] >>> 24) >= 200) n = src[i - w];
+        else if(x > 0 && (src[i - 1] >>> 24) >= 200) n = src[i - 1];
+        else if(x < w - 1 && (src[i + 1] >>> 24) >= 200) n = src[i + 1];
+        if(n) out[i] = hdOutlineOf(n);
+      }
+    }
+  }
+}
+function hdEnhanceScenery(image, seed = 0){
+  const w = image.width;
+  const h = image.height;
+  const out = new Uint32Array(image.data.buffer, image.data.byteOffset, w * h);
+  const src = out.slice();
+  let minY = -1;
+  let maxY = -1;
+  for(let y = 0; y < h; y++){
+    for(let x = 0; x < w; x++){
+      if((src[y * w + x] >>> 24) >= 200){
+        if(minY < 0) minY = y;
+        maxY = y;
+        break;
+      }
+    }
+  }
+  if(minY < 0) return;
+  const span = Math.max(1, maxY - minY);
+  for(let y = minY; y <= maxY; y++){
+    const row = y * w;
+    const t = (y - minY) / span;
+    const occlusion = t > 0.68 ? (t - 0.68) / 0.32 * 10 : -1;
+    for(let x = 0; x < w; x++){
+      const i = row + x;
+      const c = src[i];
+      if((c >>> 24) < 200) continue;
+      const rgb = c & 0xffffff;
+      const up = y > 0 ? src[i - w] : 0;
+      const dn = y < h - 1 ? src[i + w] : 0;
+      const lf = x > 0 ? src[i - 1] : 0;
+      const rt = x < w - 1 ? src[i + 1] : 0;
+      const sameUp = (up >>> 24) >= 200 && (up & 0xffffff) === rgb;
+      const sameDown = (dn >>> 24) >= 200 && (dn & 0xffffff) === rgb;
+      const sameLeft = (lf >>> 24) >= 200 && (lf & 0xffffff) === rgb;
+      const sameRight = (rt >>> 24) >= 200 && (rt & 0xffffff) === rgb;
+      let next = c;
+      if(!sameUp && sameDown) next = hdLift(c, 0.16);
+      else if(!sameDown && sameUp) next = hdDim(c, 0.8);
+      else if(!sameLeft && sameRight) next = hdLift(c, 0.06);
+      else if(!sameRight && sameLeft) next = hdDim(c, 0.9);
+      else if(sameUp && sameDown && sameLeft && sameRight){
+        const n = hdHash(x, y, seed);
+        if(n < 0.07) next = hdDim(c, 0.88);
+        else if(n > 0.955) next = hdLift(c, 0.08);
+      }
+      if(occlusion >= 0 && HD_BAYER4[(y & 3) * 4 + (x & 3)] < occlusion) next = hdDim(next, 0.86);
+      out[i] = next;
+    }
+  }
+}
+
+function pixelDisc(cx, cy, r, color, squash = 1){
+  const radius = Math.max(0, Math.round(r));
+  const x0 = Math.round(cx);
+  const y0 = Math.round(cy);
+  ctx.fillStyle = color;
+  if(radius <= 0){ fillPixels(x0, y0, 1, 1); return; }
+  const rows = Math.max(1, Math.round(radius * squash));
+  for(let dy = -rows; dy <= rows; dy++){
+    const t = dy / rows;
+    const half = Math.round(radius * Math.sqrt(Math.max(0, 1 - t * t)));
+    fillPixels(x0 - half, y0 + dy, half * 2 + 1, 1);
+  }
+}
+// Media cupula apoyada en baseY (mitad superior de un disco). squash = alto/radio.
+function pixelDome(cx, baseY, r, color, squash = 1){
+  const radius = Math.max(1, Math.round(r));
+  const rows = Math.max(1, Math.round(radius * squash));
+  const x0 = Math.round(cx);
+  const y0 = Math.round(baseY);
+  ctx.fillStyle = color;
+  for(let dy = 0; dy < rows; dy++){
+    const t = dy / rows;
+    const half = Math.round(radius * Math.sqrt(Math.max(0, 1 - t * t)));
+    fillPixels(x0 - half, y0 - dy - 1, half * 2 + 1, 1);
+  }
+}
+// Triangulo por filas: mitad izquierda con luz, derecha con sombra (pinos, conos).
+function pixelTriangle(cx, topY, height, halfBase, color, shade){
+  const rows = Math.max(1, Math.round(height));
+  const x0 = Math.round(cx);
+  const y0 = Math.round(topY);
+  for(let i = 0; i < rows; i++){
+    const half = Math.max(0, Math.round(halfBase * (i + 1) / rows));
+    ctx.fillStyle = color;
+    fillPixels(x0 - half, y0 + i, half + 1, 1);
+    if(half > 0){
+      ctx.fillStyle = shade || color;
+      fillPixels(x0 + 1, y0 + i, half, 1);
+    }
+  }
+}
+
+// ==== ARTE HD DE LOS MECHAKATZ (inicio) ====
+// Dibujados a resolucion nativa: 1 px del arte = 1 px de pantalla cuando el
+// mecha se ve a MECHA_HD_SCALE (≈52 px de alto con orejas). Hay vista lateral
+// (mirando a la DERECHA, (0,0) = pies; mechaPainter espeja), frontal y
+// trasera (giro 360° del escaner del celular) y derribado. El pelaje (coat)
+// pinta el patron de gato en cabeza, torso, patas y cola.
+// Este bloque se copia tal cual al mando del celular y al editor
+// (build_config_editor.js): no puede usar game ni CONFIG.
+const MECHA_HD_SCALE = 1.8;
+const MECHA_COATS = [
+  { value:'solid', label:'Liso' },
+  { value:'tabby', label:'Atigrado' },
+  { value:'spots', label:'Manchas (bengali)' },
+  { value:'points', label:'Puntas (siames)' },
+  { value:'tuxedo', label:'Esmoquin' },
+  { value:'calico', label:'Calico (tricolor)' },
+  { value:'tortie', label:'Carey (moteado)' }
+];
+const MECHA_EARS = [
+  { value:'normal', label:'Normales' },
+  { value:'big', label:'Grandes' },
+  { value:'fold', label:'Plegadas (fold)' },
+  { value:'tuft', label:'Con penacho (lince)' }
+];
+const MECHA_FX = [
+  { value:'wave', label:'Anillos de onda' },
+  { value:'pound', label:'Golpe al suelo' },
+  { value:'bolts', label:'Rayos' },
+  { value:'slash', label:'Corte sombra' }
+];
+const MECHA_FX_ORDER = ['wave', 'pound', 'bolts', 'slash'];
+// Opciones de hdEnhanceSprite para los mechas: ya traen luz y sombra
+// dibujadas, el pase solo suma contorno y un volumen suave.
+const MECHA_HD_PASS = { light:0.14, shade:0.8, sideLight:0.05, sideShade:0.9 };
+function mechaMix(a, b, t){
+  const pa = parseInt(shadeHex(a, 1).slice(1), 16);
+  const pb = parseInt(shadeHex(b, 1).slice(1), 16);
+  const channel = shift => {
+    const from = (pa >> shift) & 255;
+    return clamp(Math.round(from + (((pb >> shift) & 255) - from) * t), 0, 255);
+  };
+  return `#${[channel(16), channel(8), channel(0)].map(v => v.toString(16).padStart(2, '0')).join('')}`;
+}
+// Completa y valida el look de gato de un personaje (configs viejas incluidas).
+function sanitizeMechaLook(char, idx = 0){
+  const valid = (list, value, fallback) => list.some(opt => opt.value === value) ? value : fallback;
+  char.coat = valid(MECHA_COATS, char.coat, 'solid');
+  char.ears = valid(MECHA_EARS, char.ears, 'normal');
+  char.fx = valid(MECHA_FX, char.fx, MECHA_FX_ORDER[idx % MECHA_FX_ORDER.length]);
+  const body = safeHexColor(char.body, '#00f0ff');
+  char.coatColor = safeHexColor(char.coatColor, shadeHex(body, 0.6));
+  char.coatColor2 = safeHexColor(char.coatColor2, shadeHex(body, 0.35));
+  char.belly = safeHexColor(char.belly, mechaMix(body, '#ffffff', 0.55));
+}
+function mechaFxKind(char, idx = 0){
+  return MECHA_FX_ORDER.includes(char && char.fx) ? char.fx : MECHA_FX_ORDER[idx % MECHA_FX_ORDER.length];
+}
+function mechaCoatLabel(coat){
+  const found = MECHA_COATS.find(opt => opt.value === coat);
+  return found ? found.label : 'Liso';
+}
+function mechaEarsLabel(ears){
+  const found = MECHA_EARS.find(opt => opt.value === ears);
+  return found ? found.label : 'Normales';
+}
+const MECHA_PALETTE_CACHE = new Map();
+// Paleta con luces y sombras de cada color. far = miembros del lado lejano.
+function mechaPalette(char, far = false){
+  const key = `${char.body}|${char.accent}|${char.visor}|${char.coatColor}|${char.coatColor2}|${char.belly}|${far ? 1 : 0}`;
+  let pal = MECHA_PALETTE_CACHE.get(key);
+  if(pal) return pal;
+  const body = shadeHex(safeHexColor(char.body, '#00f0ff'), 1);
+  const accent = shadeHex(safeHexColor(char.accent, shadeHex(body, 0.5)), 1);
+  const visor = shadeHex(safeHexColor(char.visor, '#ffffff'), 1);
+  const coat = shadeHex(safeHexColor(char.coatColor, shadeHex(body, 0.6)), 1);
+  const coat2 = shadeHex(safeHexColor(char.coatColor2, shadeHex(body, 0.35)), 1);
+  const belly = shadeHex(safeHexColor(char.belly, mechaMix(body, '#ffffff', 0.55)), 1);
+  pal = {
+    body, bodyHi:mechaMix(body, '#ffffff', 0.3), bodyLo:shadeHex(body, 0.72), bodyDk:shadeHex(body, 0.5),
+    accent, accentHi:mechaMix(accent, '#ffffff', 0.32), accentLo:shadeHex(accent, 0.66),
+    visor, visorHi:mechaMix(visor, '#ffffff', 0.6), visorLo:shadeHex(visor, 0.6),
+    coat, coatHi:mechaMix(coat, '#ffffff', 0.22), coatLo:shadeHex(coat, 0.72),
+    coat2, coat2Hi:mechaMix(coat2, '#ffffff', 0.22), coat2Lo:shadeHex(coat2, 0.72),
+    belly, bellyHi:mechaMix(belly, '#ffffff', 0.45), bellyLo:shadeHex(belly, 0.8),
+    metal:'#8c96aa', metalHi:'#d6dce8', metalLo:'#4c5468',
+    glass:'#121828', glassHi:'#34466a',
+    earIn:'#f39ab4', nose:'#ff7896', noseHi:'#ffc4d2', claw:'#eef4ff'
+  };
+  if(far){
+    for(const name of Object.keys(pal)) pal[name] = shadeHex(pal[name], 0.66);
+  }
+  if(MECHA_PALETTE_CACHE.size > 160) MECHA_PALETTE_CACHE.clear();
+  MECHA_PALETTE_CACHE.set(key, pal);
+  return pal;
+}
+// Tono con brillo de un color de la paleta (bordes superiores).
+function mechaLit(pal, color){
+  if(color === pal.body) return pal.bodyHi;
+  if(color === pal.coat) return pal.coatHi;
+  if(color === pal.coat2) return pal.coat2Hi;
+  if(color === pal.belly) return pal.bellyHi;
+  if(color === pal.accent) return pal.accentHi;
+  return color;
+}
+// Color de cada zona segun el pelaje (patas, cola, orejas, hocico).
+function mechaZoneColor(pal, coat, zone){
+  if(coat === 'points' && (zone === 'paw' || zone === 'tail' || zone === 'ear' || zone === 'mask')) return pal.coat;
+  if(coat === 'tuxedo' && (zone === 'paw' || zone === 'mask')) return pal.belly;
+  if(coat === 'calico' && zone === 'tail') return pal.coat2;
+  if(zone === 'mask') return pal.belly;
+  return pal.body;
+}
+// Pintor local del arte (x hacia adelante). dir < 0 lo espeja.
+function mechaPainter(ox, oy, dir){
+  const X = Math.round(ox);
+  const Y = Math.round(oy);
+  const R = (lx, ly, w, h, color) => {
+    if(w <= 0 || h <= 0) return;
+    rect(dir < 0 ? X - lx - w : X + lx, Y + ly, w, h, color);
+  };
+  const P = (lx, ly, color) => R(lx, ly, 1, 1, color);
+  const D = (lx, ly, r, color, squash = 1) => pixelDisc(dir < 0 ? X - lx - 1 : X + lx, Y + ly, r, color, squash);
+  // Miembro grueso de (x0,y0) a (x1,y1): cuadrados de t px por paso.
+  const L = (x0, y0, x1, y1, color, t = 3) => {
+    const steps = Math.max(1, Math.round(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))));
+    const half = Math.floor(t / 2);
+    for(let k = 0; k <= steps; k++){
+      R(Math.round(x0 + (x1 - x0) * k / steps) - half, Math.round(y0 + (y1 - y0) * k / steps) - half, t, t, color);
+    }
+  };
+  return { R, P, D, L };
+}
+function drawMechaAura(x, y, char, scale = 1, intensity = 1){
+  const bodyAura = char.body || '#00f0ff';
+  const visorAura = char.visor || '#ffffff';
+  const glowBlur = Math.max(2, 5 * scale * intensity);
+  ctx.save();
+  ctx.globalAlpha = 0.16 * intensity;
+  ctx.filter = `blur(${glowBlur}px)`;
+  ctx.fillStyle = visorAura;
+  ctx.beginPath();
+  ctx.ellipse(x, y - 15 * scale, 10 * scale, 14 * scale, 0, 0, TAU);
+  ctx.fill();
+  ctx.globalAlpha = 0.1 * intensity;
+  ctx.fillStyle = bodyAura;
+  ctx.beginPath();
+  ctx.ellipse(x, y - 14 * scale, 15 * scale, 19 * scale, 0, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+}
+// Filas de la oreja: [desplazamiento, ancho] desde la base hacia la punta.
+const MECHA_EAR_ROWS = {
+  normal:{ rows:[[0, 6], [0, 6], [1, 5], [1, 4], [2, 3], [2, 2], [3, 1]], inner:[[2, 2], [2, 2], [3, 1], [3, 1]] },
+  big:{ rows:[[0, 7], [0, 7], [1, 6], [1, 5], [2, 4], [2, 4], [3, 3], [3, 2], [4, 1]], inner:[[2, 3], [2, 3], [3, 2], [3, 2], [4, 1]] }
+};
+// Oreja de perfil con base en (baseX, baseY) (fila inferior). mirror voltea
+// la inclinacion (vista frontal/trasera del lado derecho).
+function mechaEar(R, P, pal, char, baseX, baseY, options = {}){
+  const earColor = options.color || mechaZoneColor(pal, char.coat, 'ear');
+  const inner = options.back ? null : pal.earIn;
+  const mirror = !!options.mirror;
+  if(char.ears === 'fold'){
+    // Plegada: un casquete bajo con la punta doblada hacia el frente.
+    R(baseX, baseY - 2, 6, 3, earColor);
+    R(baseX + 1, baseY - 3, 4, 1, earColor);
+    R(baseX + 1, baseY - 3, 3, 1, mechaLit(pal, earColor));
+    R(mirror ? baseX : baseX + 4, baseY - 1, 2, 2, pal.bodyLo);
+    return;
+  }
+  const spec = MECHA_EAR_ROWS[char.ears === 'big' ? 'big' : 'normal'];
+  const total = spec.rows[0][1];
+  spec.rows.forEach(([off, w], row) => {
+    const left = mirror ? baseX + total - off - w : baseX + off;
+    R(left, baseY - row, w, 1, earColor);
+  });
+  // Borde con luz del lado de adelante.
+  spec.rows.forEach(([off, w], row) => {
+    if(row < 2) return;
+    const edge = mirror ? baseX + total - off - 1 : baseX + off;
+    P(edge, baseY - row, mechaLit(pal, earColor));
+  });
+  if(inner){
+    spec.inner.forEach(([off, w], k) => {
+      const left = mirror ? baseX + total - off - w : baseX + off;
+      R(left, baseY - 1 - k, w, 1, inner);
+    });
+  }
+  if(char.ears === 'tuft'){
+    const tip = spec.rows[spec.rows.length - 1][0];
+    const tipX = mirror ? baseX + total - tip - 1 : baseX + tip;
+    const tuft = char.coat === 'solid' ? pal.bodyDk : pal.coat;
+    P(tipX, baseY - spec.rows.length, tuft);
+    P(tipX + (mirror ? -1 : 1), baseY - spec.rows.length - 1, tuft);
+  }
+}
+// ---- Vista lateral (la del juego) ----
+function mechaTailSide(R, P, D, pal, coat, u, anim, swing = 0){
+  const pts = [[-9, -17], [-11, -18], [-13, -20], [-14, -23], [-15, -26], [-15, -29], [-14, -32], [-12, -34]];
+  const sway = Math.sin(anim * 0.12);
+  const base = mechaZoneColor(pal, coat, 'tail');
+  const whip = clamp(swing, 0, 1);
+  let tipX = 0;
+  let tipY = 0;
+  pts.forEach(([tx, ty], k) => {
+    // Con latigazo la cola se estira hacia atras casi horizontal.
+    const wx = -9 - k * 2.4;
+    const wy = -17 - k * 0.6;
+    const sx = Math.round(tx + (wx - tx) * whip) + (k >= 3 ? Math.round(sway * (k - 2) * 0.6 * (1 - whip)) : 0);
+    const sy = Math.round(ty + (wy - ty) * whip) + u;
+    let color = base;
+    if(coat === 'tabby' && k % 2 === 1) color = pal.coat;
+    if(coat === 'spots' && k % 3 === 1) color = pal.coat;
+    if(coat === 'tortie') color = k % 3 === 0 ? pal.coat : (k % 3 === 1 ? pal.coat2 : pal.body);
+    if(coat === 'tuxedo' && k === pts.length - 1) color = pal.belly;
+    R(sx - 1, sy - 1, 3, 3, color);
+    P(sx - 1, sy - 1, mechaLit(pal, color));
+    if(coat === 'solid' && k % 2 === 0) P(sx + 1, sy + 1, pal.accent);
+    tipX = sx;
+    tipY = sy;
+  });
+  R(tipX - 1, tipY - 3, 3, 2, pal.visor);
+  P(tipX, tipY - 3, pal.visorHi);
+}
+// crouch baja la cadera (px) y dobla la rodilla hacia adelante.
+function mechaLegSide(R, P, L, pal, coat, hipX, stride, lift, near, crouch = 0){
+  const c = Math.max(0, Math.round(crouch));
+  const kneeX = hipX + 2 + Math.round(stride * 0.5) + c;
+  const kneeY = -10 + Math.round(c * 0.4);
+  const ankleX = hipX - 1 + stride;
+  const ankleY = -4 - lift;
+  L(hipX, -14 + c, kneeX, kneeY, pal.body, 4);
+  R(hipX - 2, -16 + c, 4, 1, pal.bodyHi);
+  if(coat === 'tabby'){
+    R(hipX - 1, -14 + c, 1, 3, pal.coat);
+    R(hipX + 1, -13 + c, 1, 3, pal.coat);
+  } else if(coat === 'spots'){
+    R(hipX - 1, -13 + c, 2, 2, pal.coat);
+    P(hipX + 1, -11 + c, pal.coat);
+  } else if(coat === 'calico' && near){
+    R(hipX - 2, -15 + c, 3, 3, pal.coat);
+  } else if(coat === 'tortie'){
+    P(hipX - 1, -13 + c, pal.coat);
+    P(hipX + 1, -12 + c, pal.coat2);
+  }
+  R(kneeX - 1, kneeY - 1, 3, 3, pal.metal);
+  P(kneeX - 1, kneeY - 1, pal.metalHi);
+  L(kneeX, kneeY + 2, ankleX, ankleY, pal.accent, 3);
+  const paw = mechaZoneColor(pal, coat, 'paw');
+  R(ankleX - 1, ankleY + 1, 6, 3, paw);
+  R(ankleX - 1, ankleY + 1, 6, 1, mechaLit(pal, paw));
+  P(ankleX + 1, ankleY + 3, pal.glass);
+  P(ankleX + 3, ankleY + 3, pal.glass);
+  P(ankleX + 5, ankleY + 3, pal.claw);
+}
+function mechaTorsoSide(R, P, pal, coat, u, glow){
+  // Cadera y cinturon con hebilla.
+  R(-7, -17 + u, 14, 4, pal.accent);
+  R(-7, -17 + u, 14, 1, pal.accentHi);
+  R(-7, -14 + u, 14, 1, pal.accentLo);
+  R(2, -17 + u, 3, 3, pal.metal);
+  P(2, -17 + u, pal.metalHi);
+  // Pecho redondeado con luz arriba y sombra atras/abajo.
+  R(-6, -30 + u, 12, 1, pal.bodyHi);
+  R(-7, -29 + u, 14, 12, pal.body);
+  R(-5, -29 + u, 9, 1, pal.bodyHi);
+  R(-7, -28 + u, 1, 10, pal.bodyLo);
+  R(-6, -18 + u, 13, 1, pal.bodyLo);
+  if(coat === 'tabby'){
+    for(let k = 0; k < 3; k++){
+      R(-6 + k * 3, -28 + u, 1, 4, pal.coat);
+      R(-5 + k * 3, -24 + u, 1, 3, pal.coat);
+    }
+  } else if(coat === 'spots'){
+    [[-5, -27], [-2, -28], [-5, -22], [-2, -21], [-4, -19]].forEach(([sx, sy]) => {
+      R(sx, sy + u, 2, 2, pal.coat);
+      P(sx + 1, sy + 1 + u, pal.coat2);
+    });
+  } else if(coat === 'calico'){
+    R(-6, -29 + u, 5, 4, pal.coat);
+    R(-3, -23 + u, 4, 3, pal.coat2);
+  } else if(coat === 'tortie'){
+    [[-6, -28, 'coat'], [-3, -27, 'coat2'], [-5, -24, 'coat2'], [-2, -23, 'coat'], [-6, -20, 'coat'], [-3, -19, 'coat2']].forEach(([sx, sy, key]) => {
+      R(sx, sy + u, 2, 1 + ((sx + sy) & 1), pal[key]);
+    });
+  }
+  // Placa del pecho (mas ancha en el esmoquin: pechera blanca).
+  const bib = coat === 'tuxedo' ? 2 : 0;
+  R(1 - bib, -27 + u, 6 + bib, 9, pal.belly);
+  R(1 - bib, -27 + u, 6 + bib, 1, pal.bellyHi);
+  R(1 - bib, -22 + u, 6 + bib, 1, pal.bellyLo);
+  R(6, -26 + u, 1, 8, pal.bellyLo);
+  // Nucleo de energia.
+  R(-3, -26 + u, 3, 3, pal.glass);
+  P(-2, -25 + u, glow ? pal.visorHi : pal.visor);
+  // Mochila con ventilas y tobera.
+  R(-11, -28 + u, 4, 10, pal.metal);
+  R(-11, -28 + u, 4, 1, pal.metalHi);
+  R(-11, -19 + u, 4, 1, pal.metalLo);
+  for(let k = 0; k < 3; k++) R(-10, -26 + k * 2 + u, 2, 1, pal.glass);
+  R(-10, -18 + u, 3, 2, pal.metalLo);
+  R(-2, -32 + u, 5, 2, pal.metalLo);
+}
+function mechaHeadSide(R, P, L, pal, far, char, h, anim){
+  const coat = char.coat;
+  mechaEar(R, P, far, char, -6, -46 + h);
+  // Craneo redondeado.
+  R(-5, -46 + h, 11, 1, pal.body);
+  R(-6, -45 + h, 13, 1, pal.body);
+  R(-7, -44 + h, 15, 10, pal.body);
+  R(-6, -34 + h, 13, 1, pal.body);
+  R(-5, -33 + h, 11, 1, pal.bodyLo);
+  R(-4, -46 + h, 8, 1, pal.bodyHi);
+  R(-5, -45 + h, 9, 1, pal.bodyHi);
+  R(-7, -43 + h, 1, 8, pal.bodyLo);
+  R(-6, -34 + h, 12, 1, pal.bodyLo);
+  if(coat === 'tabby'){
+    R(-6, -43 + h, 1, 3, pal.coat);
+    R(-4, -44 + h, 1, 3, pal.coat);
+    R(-2, -44 + h, 1, 2, pal.coat);
+    R(1, -37 + h, 3, 1, pal.coat);
+  } else if(coat === 'spots'){
+    R(-5, -42 + h, 2, 2, pal.coat);
+    P(-2, -44 + h, pal.coat);
+    P(-4, -38 + h, pal.coat);
+  } else if(coat === 'calico'){
+    R(-6, -44 + h, 5, 4, pal.coat);
+  } else if(coat === 'tortie'){
+    P(-5, -43 + h, pal.coat);
+    P(-3, -41 + h, pal.coat2);
+    P(-6, -39 + h, pal.coat2);
+    P(-2, -44 + h, pal.coat);
+  }
+  // Placa de la frente con remache.
+  R(-3, -47 + h, 5, 2, pal.accent);
+  P(-3, -47 + h, pal.accentHi);
+  // Visor con los ojos del gato (parpadeo ocasional).
+  R(0, -42 + h, 9, 4, pal.glass);
+  R(1, -42 + h, 7, 1, pal.glassHi);
+  const blink = (Math.floor(anim) % 170) < 4;
+  if(blink){
+    R(3, -40 + h, 4, 1, pal.visor);
+  } else {
+    R(3, -41 + h, 3, 2, pal.visor);
+    P(4, -41 + h, '#ffffff');
+    R(7, -41 + h, 1, 2, pal.visorLo);
+  }
+  // Mascara (siames) y hocico con nariz y boca.
+  if(coat === 'points') R(0, -38 + h, 6, 4, pal.coat);
+  const muzzle = mechaZoneColor(pal, coat, 'mask');
+  R(5, -37 + h, 6, 4, muzzle);
+  R(5, -37 + h, 6, 1, mechaLit(pal, muzzle));
+  R(10, -36 + h, 1, 3, shadeHex(muzzle, 0.8));
+  R(9, -38 + h, 2, 1, pal.nose);
+  P(10, -38 + h, pal.noseHi);
+  R(7, -34 + h, 3, 1, shadeHex(muzzle, 0.7));
+  // Mejilla blindada y bigotes-antena.
+  R(0, -37 + h, 4, 3, pal.accent);
+  P(0, -37 + h, pal.accentHi);
+  const twitch = Math.sin(anim * 0.1) > 0.92 ? 1 : 0;
+  L(11, -36 + h, 15, -37 + h - twitch, pal.metalHi, 1);
+  L(11, -35 + h, 15, -34 + h, pal.metalHi, 1);
+  mechaEar(R, P, pal, char, 1, -46 + h);
+}
+// Brazos fuera de combate segun el estado (los golpes y especiales van por
+// drawMechaCombat); far = paleta del brazo lejano.
+function mechaArmsSide(R, P, L, D, pal, far, coat, u, state, frame, phase, anim, layer){
+  const fist = mechaZoneColor(pal, coat, 'paw');
+  const farFist = mechaZoneColor(far, coat, 'paw');
+  const swing = Math.round(phase * 2);
+  if(layer === 'far'){
+    if(state === 'victory'){
+      L(-3, -27 + u, -6, -45 + u, far.body, 3);
+      R(-9, -49 + u, 4, 4, farFist);
+    } else if(state === 'carry'){
+      L(-3, -27 + u, 6, -34 + u, far.body, 3);
+      R(5, -37 + u, 4, 4, farFist);
+    } else if(state === 'dive'){
+      L(-3, -27 + u, -9, -31 + u, far.body, 3);
+      R(-12, -33 + u, 4, 3, farFist);
+    } else {
+      L(-3, -27 + u, -4 - swing, -21 + u, far.body, 3);
+      R(-6 - swing, -21 + u, 4, 4, far.accent);
+      R(-6 - swing, -18 + u, 4, 3, farFist);
+    }
+    return;
+  }
+  // Hombrera.
+  D(1, -28 + u, 2, pal.accent);
+  P(0, -29 + u, pal.accentHi);
+  if(state === 'shield'){
+    L(2, -27 + u, 8, -30 + u, pal.body, 3);
+    R(8, -32 + u, 4, 4, fist);
+    const oldAlpha = ctx.globalAlpha;
+    ctx.globalAlpha = oldAlpha * 0.5;
+    R(13, -44 + u, 3, 34, pal.visor);
+    ctx.globalAlpha = oldAlpha;
+    R(13, -44 + u, 1, 34, pal.visorHi);
+    for(let k = 0; k < 6; k++) P(14, -41 + k * 6 + u, pal.visorHi);
+  } else if(state === 'victory'){
+    L(2, -27 + u, 5, -45 + u, pal.body, 3);
+    R(3, -49 + u, 4, 4, fist);
+    R(3, -49 + u, 4, 1, mechaLit(pal, fist));
+  } else if(state === 'carry'){
+    L(2, -27 + u, 9, -32 + u, pal.body, 3);
+    R(9, -35 + u, 4, 4, fist);
+  } else if(state === 'dive'){
+    L(2, -27 + u, -4, -30 + u, pal.body, 3);
+    R(-7, -32 + u, 4, 3, fist);
+  } else if(state === 'repair'){
+    L(2, -27 + u, 7, -20 + u, pal.body, 3);
+    R(7, -21 + u, 4, 4, fist);
+    if(Math.floor(anim) % 6 < 3){
+      P(12, -22 + u, '#ffea00');
+      P(13, -19 + u, '#ffffff');
+    }
+  } else {
+    L(2, -26 + u, 2 + swing, -21 + u, pal.body, 3);
+    R(1 + swing, -21 + u, 4, 4, pal.accent);
+    R(1 + swing, -21 + u, 4, 1, pal.accentHi);
+    R(2 + swing, -18 + u, 4, 4, fist);
+    R(2 + swing, -18 + u, 4, 1, mechaLit(pal, fist));
+    P(5 + swing, -16 + u, pal.glass);
+  }
+}
+// ---- Poses de combate (combo, golpe fuerte, remate y especiales) ----
+// Cada movimiento es una lista de claves en t (0..1 del movimiento). Cada
+// clave pisa valores de MECHA_GUARD (guardia de pelea): bx/u = inclinacion y
+// agachado del cuerpo (u < 0 despega del suelo), hx/hy = cabeza, stepF/stepB
+// = pasos de los pies, ne/nf y fe/ff = codo y puño del brazo cercano y
+// lejano (coordenadas del cuerpo), fistN/fistF = tamaño de puño, clawN/clawF
+// = garras, glow/eye = brillo del nucleo y de los ojos, tail = latigazo,
+// farFront = el brazo lejano cruza por delante, view = vista del giro del
+// remate. mechaMovePose interpola con suavizado; la ultima clave vuelve a
+// MECHA_REST (brazos sueltos) para empalmar con la pose normal.
+const MECHA_GUARD = {
+  bx:0, u:0, hx:0, hy:0, stepF:0, stepB:0,
+  ne:[5, -24], nf:[8, -27], fe:[0, -22], ff:[4, -25],
+  fistN:4, fistF:4, clawN:0, clawF:0, glow:0, eye:0, tail:0, farFront:false, view:'side'
+};
+const MECHA_REST = { ne:[2, -22], nf:[3, -17], fe:[-4, -21], ff:[-4, -17] };
+// Duracion en cuadros de cada movimiento (el juego usa los mismos valores).
+const MECHA_MOVE_FRAMES = { jab:12, cross:12, upper:12, haymaker:18, finisher:33, special:28, shoot:10 };
+// Cuadro (stateTimer) en que el especial dispara: 14 de carga y 14 de salida.
+const MECHA_SPECIAL_FIRE = 14;
+const MECHA_MOVES = {
+  jab:[
+    { t:0 },
+    { t:0.18, bx:-1, ne:[3, -25], nf:[4, -27] },
+    { t:0.33, bx:2, stepF:1, ne:[9, -27], nf:[16, -27], clawN:2, eye:0.6 },
+    { t:0.6, bx:2, stepF:1, ne:[9, -27], nf:[15, -27], clawN:2 },
+    Object.assign({ t:1 }, MECHA_REST)
+  ],
+  cross:[
+    { t:0 },
+    { t:0.18, bx:-1, fe:[-3, -22], ff:[-2, -25] },
+    { t:0.33, bx:3, stepF:2, stepB:-1, fe:[8, -26], ff:[17, -25], clawF:3, farFront:true, ne:[3, -21], nf:[3, -24], eye:0.6 },
+    { t:0.6, bx:3, stepF:2, stepB:-1, fe:[8, -26], ff:[16, -25], clawF:3, farFront:true, ne:[3, -21], nf:[3, -24] },
+    Object.assign({ t:1 }, MECHA_REST)
+  ],
+  upper:[
+    { t:0 },
+    { t:0.2, u:2, bx:1, ne:[6, -19], nf:[9, -16] },
+    { t:0.33, u:-2, bx:2, hy:-1, stepF:1, ne:[8, -32], nf:[10, -43], clawN:2, eye:0.7 },
+    { t:0.6, u:-1, bx:2, ne:[8, -32], nf:[10, -42], clawN:2 },
+    Object.assign({ t:1 }, MECHA_REST)
+  ],
+  haymaker:[
+    { t:0 },
+    { t:0.28, bx:-3, u:1, hx:-1, stepB:-1, ne:[-4, -26], nf:[-9, -27], fistN:5, glow:0.8, fe:[4, -24], ff:[9, -26] },
+    { t:0.44, bx:4, stepF:3, stepB:-3, ne:[10, -28], nf:[21, -28], fistN:6, clawN:3, fe:[-4, -25], ff:[-7, -22], eye:1, glow:0.4 },
+    { t:0.72, bx:3, stepF:3, stepB:-3, ne:[10, -28], nf:[20, -28], fistN:6, clawN:3, fe:[-4, -25], ff:[-7, -22] },
+    Object.assign({ t:1 }, MECHA_REST)
+  ],
+  finisher:[
+    { t:0 },
+    { t:0.15, u:3, bx:-1, ne:[5, -23], nf:[7, -26], fe:[3, -24], ff:[6, -23], farFront:true, glow:1, eye:1 },
+    { t:0.2, u:1, glow:1, eye:1, tail:1, ne:[9, -27], nf:[14, -28] },
+    { t:0.3, u:-3, view:'back', glow:1, tail:1 },
+    { t:0.39, u:-4, view:'side-flip', glow:1, tail:1, ne:[9, -27], nf:[14, -28] },
+    { t:0.48, u:-3, view:'front', glow:1, tail:1 },
+    { t:0.58, u:0, ne:[-4, -26], nf:[-7, -27], fe:[-5, -24], ff:[-8, -23], glow:1, eye:1, tail:0.6 },
+    { t:0.63, u:2, bx:-2, ne:[-4, -26], nf:[-8, -27], fe:[-5, -24], ff:[-9, -23], glow:1, eye:1 },
+    { t:0.7, bx:4, stepF:3, stepB:-2, ne:[10, -29], nf:[20, -31], fe:[9, -23], ff:[19, -22], farFront:true, fistN:5, fistF:5, clawN:4, clawF:4, eye:1 },
+    { t:0.86, bx:3, stepF:3, stepB:-2, ne:[10, -29], nf:[19, -31], fe:[9, -23], ff:[18, -22], farFront:true, fistN:5, fistF:5, clawN:4, clawF:4 },
+    Object.assign({ t:1 }, MECHA_REST)
+  ],
+  // Especiales: 0..0.5 carga, 0.5 dispara (MECHA_SPECIAL_FIRE), luego salida.
+  special_wave:[
+    { t:0 },
+    { t:0.12, bx:-2, u:1, ne:[-1, -22], nf:[-3, -21], fe:[-3, -22], ff:[-5, -20], glow:0.5, eye:0.6 },
+    { t:0.45, bx:-2, u:1, ne:[-1, -22], nf:[-3, -21], fe:[-3, -22], ff:[-5, -20], glow:1, eye:1 },
+    { t:0.5, bx:3, stepF:2, ne:[9, -28], nf:[16, -28], fe:[8, -23], ff:[15, -22], farFront:true, clawN:2, clawF:2, glow:1, eye:1 },
+    { t:0.78, bx:3, stepF:2, ne:[9, -28], nf:[16, -28], fe:[8, -23], ff:[15, -22], farFront:true, clawN:2, clawF:2, glow:0.4 },
+    Object.assign({ t:1 }, MECHA_REST)
+  ],
+  special_pound:[
+    { t:0 },
+    { t:0.1, u:3, ne:[5, -20], nf:[8, -17], fe:[1, -20], ff:[3, -17] },
+    { t:0.28, u:-9, ne:[3, -40], nf:[4, -50], fe:[-2, -40], ff:[-2, -50], fistN:5, fistF:5, glow:1, eye:1, tail:0.5 },
+    { t:0.45, u:-10, ne:[3, -40], nf:[4, -51], fe:[-2, -40], ff:[-2, -51], fistN:5, fistF:5, glow:1, eye:1, tail:0.5 },
+    { t:0.5, u:3, bx:1, stepF:2, stepB:-2, ne:[9, -18], nf:[13, -6], fe:[6, -16], ff:[10, -5], farFront:true, fistN:5, fistF:5, eye:1 },
+    { t:0.75, u:2, bx:1, stepF:2, stepB:-2, ne:[9, -18], nf:[13, -6], fe:[6, -16], ff:[10, -5], farFront:true, fistN:5, fistF:5 },
+    Object.assign({ t:1 }, MECHA_REST)
+  ],
+  special_bolts:[
+    { t:0 },
+    { t:0.12, ne:[2, -40], nf:[3, -52], fe:[-4, -21], ff:[-5, -18], glow:0.6, eye:1 },
+    { t:0.45, hy:-1, ne:[2, -40], nf:[3, -53], fe:[-4, -21], ff:[-5, -18], glow:1, eye:1, tail:0.3 },
+    { t:0.5, bx:2, stepF:2, ne:[10, -30], nf:[17, -31], fe:[-3, -22], ff:[-6, -19], clawN:1, glow:1, eye:1 },
+    { t:0.78, bx:2, stepF:2, ne:[10, -30], nf:[17, -31], fe:[-3, -22], ff:[-6, -19], clawN:1, glow:0.5 },
+    Object.assign({ t:1 }, MECHA_REST)
+  ],
+  special_slash:[
+    { t:0 },
+    { t:0.15, u:4, bx:-3, hy:1, stepB:-2, ne:[-4, -18], nf:[-10, -12], fe:[5, -22], ff:[9, -24], clawN:5, eye:1, glow:0.6 },
+    { t:0.45, u:4, bx:-3, hy:1, stepB:-2, ne:[-4, -18], nf:[-10, -12], fe:[5, -22], ff:[9, -24], clawN:5, eye:1, glow:1 },
+    { t:0.5, bx:6, u:-1, stepF:4, stepB:-4, ne:[8, -34], nf:[15, -42], fe:[-4, -24], ff:[-8, -21], clawN:6, eye:1, tail:0.8 },
+    { t:0.8, bx:5, stepF:4, stepB:-4, ne:[8, -34], nf:[15, -42], fe:[-4, -24], ff:[-8, -21], clawN:6, tail:0.4 },
+    Object.assign({ t:1 }, MECHA_REST)
+  ],
+  // Disparo en vuelo: el brazo apunta abajo al frente con retroceso.
+  shoot:[
+    { t:0, ne:[7, -24], nf:[13, -20], clawN:1 },
+    { t:0.25, bx:-1, ne:[6, -24], nf:[11, -21], clawN:1, eye:0.6 },
+    Object.assign({ t:1 }, MECHA_REST)
+  ]
+};
+// Movimiento a dibujar segun estado; move del juego (combo) si viene dado.
+function mechaMoveFor(state, move, char){
+  if(state === 'attack') return MECHA_MOVES[move] && ['jab', 'cross', 'upper'].includes(move) ? move : 'jab';
+  if(state === 'heavy') return move === 'finisher' ? 'finisher' : 'haymaker';
+  if(state === 'special') return `special_${mechaFxKind(char)}`;
+  if(move === 'shoot') return 'shoot';
+  return '';
+}
+function mechaMoveFrames(move){
+  return MECHA_MOVE_FRAMES[move] || (move.startsWith('special_') ? MECHA_MOVE_FRAMES.special : 12);
+}
+function mechaEase(t){
+  return t * t * (3 - 2 * t);
+}
+function mechaMovePose(move, t){
+  const keys = MECHA_MOVES[move] || MECHA_MOVES.jab;
+  const tt = clamp(t, 0, 1);
+  let a = keys[0];
+  let b = keys[keys.length - 1];
+  for(let i = 0; i < keys.length - 1; i++){
+    if(tt >= keys[i].t && tt <= keys[i + 1].t){
+      a = keys[i];
+      b = keys[i + 1];
+      break;
+    }
+  }
+  const span = b.t - a.t;
+  const f = span > 0 ? mechaEase((tt - a.t) / span) : 1;
+  const pick = (key, k) => (k[key] !== undefined ? k[key] : MECHA_GUARD[key]);
+  const pose = {};
+  for(const key of Object.keys(MECHA_GUARD)){
+    const va = pick(key, a);
+    const vb = pick(key, b);
+    if(Array.isArray(va)) pose[key] = [va[0] + (vb[0] - va[0]) * f, va[1] + (vb[1] - va[1]) * f];
+    else if(typeof va === 'number') pose[key] = va + (vb - va) * f;
+    else pose[key] = f < 0.5 ? va : vb;
+  }
+  return pose;
+}
+// Brazo por hombro, codo y puño, con garras que salen en la direccion del
+// antebrazo.
+function mechaArmPose(R, P, L, D, pal, coat, sx, sy, ex, ey, fx, fy, fist, claw, shoulder){
+  if(shoulder){
+    D(sx, sy, 2, pal.accent);
+    P(sx - 1, sy - 1, pal.accentHi);
+  }
+  L(sx, sy + 1, ex, ey, pal.body, 3);
+  R(ex - 1, ey - 1, 2, 2, pal.metal);
+  L(ex, ey, fx, fy, pal.accent, 3);
+  const paw = mechaZoneColor(pal, coat, 'paw');
+  const size = Math.max(3, Math.round(fist));
+  const half = Math.floor(size / 2);
+  R(fx - half, fy - half, size, size, paw);
+  R(fx - half, fy - half, size, 1, mechaLit(pal, paw));
+  if(claw > 0.5){
+    const dx = fx - ex;
+    const dy = fy - ey;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len;
+    const uy = dy / len;
+    const bx = fx + ux * (half + 1);
+    const by = fy + uy * (half + 1);
+    for(let k = -1; k <= 1; k++){
+      const ox = -uy * k * 1.7;
+      const oy = ux * k * 1.7;
+      L(bx + ox, by + oy, bx + ox + ux * claw, by + oy + uy * claw, pal.claw, 1);
+    }
+  }
+}
+// Banda de pixeles en arco (estela de un golpe): de a0 a a1 (radianes), mas
+// gruesa y blanca en el borde delantero. Translucida para que el pase HD no
+// la contornee.
+function mechaSmearArc(R, cx, cy, radius, a0, a1, thick, color, alpha){
+  if(alpha <= 0.02) return;
+  const lead = new Set();
+  const body = new Set();
+  const steps = Math.max(6, Math.ceil(Math.abs(a1 - a0) * (radius + thick)));
+  for(let s = 0; s <= steps; s++){
+    const k = s / steps;
+    const a = a0 + (a1 - a0) * k;
+    const band = 1 + Math.round((thick - 1) * k);
+    for(let r = 0; r < band; r++){
+      const key = `${Math.round(cx + Math.cos(a) * (radius + r))},${Math.round(cy + Math.sin(a) * (radius + r))}`;
+      if(k > 0.78) lead.add(key); else body.add(key);
+    }
+  }
+  const oldAlpha = ctx.globalAlpha;
+  ctx.globalAlpha = oldAlpha * Math.min(0.72, alpha * 0.55);
+  body.forEach(key => { if(!lead.has(key)){ const [x, y] = key.split(',').map(Number); R(x, y, 1, 1, color); } });
+  ctx.globalAlpha = oldAlpha * Math.min(0.72, alpha);
+  lead.forEach(key => { const [x, y] = key.split(',').map(Number); R(x, y, 1, 1, '#ffffff'); });
+  ctx.globalAlpha = oldAlpha;
+}
+// Lineas de velocidad detras de un puño.
+function mechaSpeedLines(R, fromX, toX, y, color, alpha){
+  if(alpha <= 0.02 || toX <= fromX) return;
+  const oldAlpha = ctx.globalAlpha;
+  ctx.globalAlpha = oldAlpha * Math.min(0.7, alpha);
+  const span = toX - fromX;
+  R(Math.round(fromX + span * 0.2), Math.round(y) - 2, Math.round(span * 0.7), 1, color);
+  R(Math.round(fromX), Math.round(y), Math.round(span), 1, '#ffffff');
+  R(Math.round(fromX + span * 0.35), Math.round(y) + 2, Math.round(span * 0.55), 1, color);
+  ctx.globalAlpha = oldAlpha;
+}
+function mechaFade(t, start, peak, end){
+  if(t <= start || t >= end) return 0;
+  return t < peak ? (t - start) / Math.max(0.001, peak - start) : 1 - (t - peak) / Math.max(0.001, end - peak);
+}
+// Estelas de cada movimiento en coordenadas del cuerpo (bx/u ya sumados).
+function mechaMoveSmears(R, move, t, pose, pal, bullet){
+  const glowColor = bullet || pal.visorHi;
+  if(move === 'jab'){
+    mechaSpeedLines(R, 3, pose.nf[0] - 3, pose.nf[1], glowColor, mechaFade(t, 0.2, 0.34, 0.55));
+  } else if(move === 'cross'){
+    const a = mechaFade(t, 0.22, 0.36, 0.62);
+    for(let k = 0; k < 3; k++) mechaSmearArc(R, pose.ff[0] - 7, pose.ff[1] + 3, 9 + k * 3, -2.0, 0.5 * Math.min(1, (t - 0.2) / 0.14) - 0.3, 1, glowColor, a);
+  } else if(move === 'upper'){
+    mechaSmearArc(R, 3, -27, 13, 1.1, 1.1 - 2.6 * Math.min(1, Math.max(0, (t - 0.2) / 0.14)), 4, glowColor, mechaFade(t, 0.2, 0.34, 0.6));
+  } else if(move === 'haymaker'){
+    const sweep = Math.min(1, Math.max(0, (t - 0.3) / 0.14));
+    mechaSmearArc(R, 5, -20, 14, 3.6, 3.6 + 2.2 * sweep, 5, glowColor, mechaFade(t, 0.3, 0.45, 0.7));
+    mechaSpeedLines(R, -6, pose.nf[0] - 4, pose.nf[1], glowColor, mechaFade(t, 0.38, 0.46, 0.66));
+  } else if(move === 'finisher'){
+    const spin = mechaFade(t, 0.18, 0.4, 0.6);
+    if(spin > 0){
+      const rot = t * 40;
+      mechaSmearArc(R, 0, -22, 15, rot, rot + 2.2, 2, glowColor, spin);
+      mechaSmearArc(R, 0, -34, 12, rot + Math.PI, rot + Math.PI + 2.2, 2, glowColor, spin);
+    }
+    const x = mechaFade(t, 0.66, 0.72, 0.92);
+    mechaSmearArc(R, 14, -26, 12, -2.3, -0.2, 4, glowColor, x);
+    mechaSmearArc(R, 14, -26, 12, 2.3, 0.2, 4, glowColor, x);
+  } else if(move === 'special_slash'){
+    const sweep = Math.min(1, Math.max(0, (t - 0.47) / 0.08));
+    mechaSmearArc(R, 4, -24, 20, 2.3, 2.3 - 3.6 * sweep, 6, glowColor, mechaFade(t, 0.46, 0.52, 0.85));
+  } else if(move === 'special_pound'){
+    const a = mechaFade(t, 0.44, 0.5, 0.62);
+    mechaSpeedLines(R, -2, 14, -30, glowColor, a);
+  }
+}
+// Mecha de perfil. state/frame como en el juego (attack, heavy, shield,
+// special, victory, carry, dive, repair, walk/run, idle). En los ataques,
+// frame es el stateTimer (cuenta hacia atras) y move el golpe del combo
+// ('jab' | 'cross' | 'upper' | 'finisher'); 'shoot' anima el disparo en vuelo.
+function drawMechaHD(x, y, char, facing, anim, state, frame, move){
+  const dir = facing < 0 ? -1 : 1;
+  const pal = mechaPalette(char);
+  const far = mechaPalette(char, true);
+  const coat = char.coat || 'solid';
+  // Dentro del pase HD (lienzo de CPU) el aura difuminada sale cara: quien
+  // usa el pase la dibuja antes en pantalla (hdMechaAura del juego).
+  if(!hdTrack && !char.noAura) drawMechaAura(x, y, char, MECHA_HD_SCALE, state === 'victory' ? 1.15 : 1);
+  const combatMove = mechaMoveFor(state, move, char);
+  if(combatMove){
+    drawMechaCombat(x, y, char, dir, anim, combatMove, 1 - clamp(frame, 0, mechaMoveFrames(combatMove)) / mechaMoveFrames(combatMove), pal, far, coat);
+    return;
+  }
+  const { R, P, D, L } = mechaPainter(x, y, dir);
+  ctx.fillStyle = 'rgba(0,0,0,.4)';
+  ctx.beginPath();
+  ctx.ellipse(x, y, 15, 4.5, 0, 0, TAU);
+  ctx.fill();
+  const walking = state === 'walk' || state === 'run';
+  const phase = walking ? Math.sin(anim * 0.4) : 0;
+  let u = walking ? -Math.round(Math.abs(phase)) : 0;
+  if(state === 'victory') u = Math.round(Math.sin(anim * 0.28) * 2);
+  mechaTailSide(R, P, D, pal, coat, u, anim);
+  mechaArmsSide(R, P, L, D, pal, far, coat, u, state, frame, phase, anim, 'far');
+  if(state === 'dive'){
+    // Patada en picada: pierna cercana estirada al frente, la otra recogida.
+    L(-3, -14, -1, -9, far.body, 4);
+    R(-3, -9, 5, 3, mechaZoneColor(far, coat, 'paw'));
+    L(2, -14, 9, -6, pal.body, 4);
+    R(8, -8, 6, 4, mechaZoneColor(pal, coat, 'paw'));
+    R(14, -8, 2, 1, pal.claw);
+    R(14, -6, 2, 1, pal.claw);
+  } else {
+    const stride = Math.round(phase * 3);
+    mechaLegSide(R, P, L, far, coat, -3, -stride, phase < -0.4 ? 1 : 0, false);
+    mechaLegSide(R, P, L, pal, coat, 2, stride, phase > 0.4 ? 1 : 0, true);
+  }
+  mechaTorsoSide(R, P, pal, coat, u, Math.floor(anim / 20) % 2 === 0);
+  mechaHeadSide(R, P, L, pal, far, char, u, anim);
+  mechaArmsSide(R, P, L, D, pal, far, coat, u, state, frame, phase, anim, 'near');
+}
+// Mecha en pose de combate (t = avance 0..1 del movimiento).
+function drawMechaCombat(x, y, char, dir, anim, move, t, pal, far, coat){
+  const pose = mechaMovePose(move, t);
+  const lift = Math.min(0, pose.u);
+  const crouch = Math.max(0, pose.u);
+  const bx = Math.round(pose.bx);
+  // Sombra en el piso: se achica cuando el mecha despega.
+  ctx.fillStyle = 'rgba(0,0,0,.4)';
+  ctx.beginPath();
+  ctx.ellipse(x, y, Math.max(8, 15 + lift * 0.6), Math.max(2.5, 4.5 + lift * 0.15), 0, 0, TAU);
+  ctx.fill();
+  const liftY = y + Math.round(lift);
+  // Giro del remate: vistas de espalda / frente / perfil opuesto.
+  if(pose.view === 'back' || pose.view === 'front'){
+    if(pose.view === 'back') drawMechaHDBack(x, liftY, char, anim);
+    else drawMechaHDFront(x, liftY, char, anim);
+    const spin = mechaPainter(x, liftY, dir);
+    mechaMoveSmears(spin.R, move, t, pose, pal, char.bullet);
+    return;
+  }
+  const viewDir = pose.view === 'side-flip' ? -dir : dir;
+  const legs = mechaPainter(x, liftY, viewDir);
+  const body = mechaPainter(x + viewDir * bx, liftY, viewDir);
+  const head = mechaPainter(x + viewDir * (bx + Math.round(pose.hx)), liftY, viewDir);
+  const c = Math.round(crouch);
+  const u = c;
+  mechaTailSide(body.R, body.P, body.D, pal, coat, u, anim, pose.tail);
+  const farPal = pose.farFront ? pal : far;
+  const drawFarArm = () => mechaArmPose(body.R, body.P, body.L, body.D, farPal, coat,
+    -3, -27 + u, Math.round(pose.fe[0]), Math.round(pose.fe[1]) + u, Math.round(pose.ff[0]), Math.round(pose.ff[1]) + u,
+    pose.fistF, pose.clawF, false);
+  if(!pose.farFront) drawFarArm();
+  const stepF = Math.round(pose.stepF);
+  const stepB = Math.round(pose.stepB);
+  mechaLegSide(legs.R, legs.P, legs.L, far, coat, -3 + bx, stepB - bx, 0, false, c);
+  mechaLegSide(legs.R, legs.P, legs.L, pal, coat, 2 + bx, stepF - bx, 0, true, c);
+  mechaTorsoSide(body.R, body.P, pal, coat, u, pose.glow > 0.3 || Math.floor(anim / 20) % 2 === 0);
+  if(pose.glow > 0.05){
+    const oldAlpha = ctx.globalAlpha;
+    ctx.globalAlpha = oldAlpha * Math.min(0.7, 0.2 + pose.glow * 0.5);
+    body.D(-2, -25 + u, Math.round(2 + pose.glow * 3), pal.visorHi);
+    ctx.globalAlpha = oldAlpha;
+  }
+  mechaHeadSide(head.R, head.P, head.L, pal, far, char, u + Math.round(pose.hy), anim);
+  if(pose.eye > 0.1){
+    // Destello de los ojos: estela que sale hacia atras del visor.
+    const len = Math.round(3 + pose.eye * 7);
+    const oldAlpha = ctx.globalAlpha;
+    ctx.globalAlpha = oldAlpha * Math.min(0.7, pose.eye * 0.7);
+    head.R(4 - len, -41 + u + Math.round(pose.hy), len, 1, pal.visorHi);
+    head.R(1 - len, -40 + u + Math.round(pose.hy), len - 2, 1, pal.visor);
+    ctx.globalAlpha = oldAlpha;
+  }
+  if(pose.farFront) drawFarArm();
+  mechaArmPose(body.R, body.P, body.L, body.D, pal, coat,
+    1, -28 + u, Math.round(pose.ne[0]), Math.round(pose.ne[1]) + u, Math.round(pose.nf[0]), Math.round(pose.nf[1]) + u,
+    pose.fistN, pose.clawN, true);
+  const shifted = Object.assign({}, pose, {
+    nf:[pose.nf[0], pose.nf[1] + u], ff:[pose.ff[0], pose.ff[1] + u]
+  });
+  mechaMoveSmears(body.R, move, t, shifted, pal, char.bullet);
+}
+// ---- Vistas frontal y trasera (giro del escaner) ----
+function mechaSymPainter(x, y){
+  const paint = mechaPainter(x, y, 1);
+  const RS = (lx, ly, w, h, color) => {
+    paint.R(lx, ly, w, h, color);
+    paint.R(-lx - w, ly, w, h, color);
+  };
+  const PS = (lx, ly, color) => RS(lx, ly, 1, 1, color);
+  return Object.assign(paint, { RS, PS });
+}
+function mechaLegsFront(RS, PS, R, pal, coat, back){
+  RS(-7, -15, 5, 6, pal.body);
+  RS(-7, -15, 5, 1, pal.bodyHi);
+  if(coat === 'tabby'){ RS(-7, -13, 5, 1, pal.coat); RS(-6, -11, 4, 1, pal.coat); }
+  if(coat === 'spots'){ RS(-6, -13, 2, 2, pal.coat); }
+  if(coat === 'calico'){ R(-7, -15, 4, 3, pal.coat); R(3, -14, 3, 3, pal.coat2); }
+  if(coat === 'tortie'){ PS(-6, -13, pal.coat); PS(-4, -11, pal.coat2); }
+  RS(-6, -10, 3, 3, pal.metal);
+  PS(-6, -10, pal.metalHi);
+  RS(-6, -8, 3, 5, pal.accent);
+  const paw = mechaZoneColor(pal, coat, 'paw');
+  RS(-8, -3, 6, 3, paw);
+  RS(-8, -3, 6, 1, mechaLit(pal, paw));
+  if(back){
+    RS(-6, -2, 2, 1, pal.glass);
+  } else {
+    PS(-7, -1, pal.glass);
+    PS(-5, -1, pal.glass);
+    PS(-3, -1, pal.claw);
+  }
+}
+function mechaTailFront(R, P, pal, coat, anim, back){
+  // De frente asoma por un costado; de espaldas sube por el centro.
+  const sway = Math.round(Math.sin(anim * 0.12) * 2);
+  const pts = back
+    ? [[0, -17], [2, -19], [4, -22], [6, -25], [7, -29], [7, -33], [6, -36], [4 + sway, -38]]
+    : [[9, -18], [11, -20], [12, -23], [13, -27], [12 + sway, -31], [11 + sway, -34]];
+  const base = mechaZoneColor(pal, coat, 'tail');
+  let tip = pts[pts.length - 1];
+  pts.forEach(([tx, ty], k) => {
+    let color = base;
+    if(coat === 'tabby' && k % 2 === 1) color = pal.coat;
+    if(coat === 'tortie') color = k % 3 === 0 ? pal.coat : (k % 3 === 1 ? pal.coat2 : pal.body);
+    if(coat === 'tuxedo' && k === pts.length - 1) color = pal.belly;
+    R(tx - 1, ty - 1, 3, 3, color);
+    P(tx - 1, ty - 1, mechaLit(pal, color));
+  });
+  R(tip[0] - 1, tip[1] - 3, 3, 2, pal.visor);
+  P(tip[0], tip[1] - 3, pal.visorHi);
+}
+function mechaHeadFrontShape(R, RS, pal){
+  R(-6, -46, 12, 1, pal.body);
+  R(-7, -45, 14, 1, pal.body);
+  R(-8, -44, 16, 10, pal.body);
+  R(-7, -34, 14, 1, pal.body);
+  R(-6, -33, 12, 1, pal.bodyLo);
+  R(-5, -46, 8, 1, pal.bodyHi);
+  R(-7, -45, 8, 1, pal.bodyHi);
+  R(-8, -43, 1, 8, pal.bodyHi);
+  R(7, -43, 1, 8, pal.bodyLo);
+  R(-7, -34, 14, 1, pal.bodyLo);
+}
+function drawMechaHDFront(x, y, char, anim){
+  const pal = mechaPalette(char);
+  const coat = char.coat || 'solid';
+  const { R, P, L, RS, PS } = mechaSymPainter(x, y);
+  ctx.fillStyle = 'rgba(0,0,0,.4)';
+  ctx.beginPath();
+  ctx.ellipse(x, y, 13, 4, 0, 0, TAU);
+  ctx.fill();
+  mechaTailFront(R, P, pal, coat, anim, false);
+  mechaLegsFront(RS, PS, R, pal, coat, false);
+  R(-8, -18, 16, 4, pal.accent);
+  R(-8, -18, 16, 1, pal.accentHi);
+  R(-8, -15, 16, 1, pal.accentLo);
+  R(-2, -18, 4, 3, pal.metal);
+  P(-2, -18, pal.metalHi);
+  // Torso con luz a la izquierda y sombra a la derecha.
+  R(-7, -31, 14, 1, pal.bodyHi);
+  R(-8, -30, 16, 12, pal.body);
+  R(-8, -30, 1, 11, pal.bodyHi);
+  R(7, -30, 1, 11, pal.bodyLo);
+  R(-8, -19, 16, 1, pal.bodyLo);
+  if(coat === 'tabby'){ RS(-8, -28, 3, 1, pal.coat); RS(-8, -25, 4, 1, pal.coat); RS(-8, -22, 3, 1, pal.coat); }
+  if(coat === 'spots'){ RS(-7, -28, 2, 2, pal.coat); RS(-6, -23, 2, 2, pal.coat); PS(-6, -27, pal.coat2); }
+  if(coat === 'calico'){ R(-8, -30, 5, 5, pal.coat); R(4, -24, 4, 4, pal.coat2); }
+  if(coat === 'tortie'){ PS(-7, -28, pal.coat); PS(-6, -25, pal.coat2); PS(-7, -21, pal.coat); P(-5, -29, pal.coat2); }
+  const bib = coat === 'tuxedo' ? 2 : 0;
+  R(-3 - bib, -28, 6 + bib * 2, 9, pal.belly);
+  R(-3 - bib, -28, 6 + bib * 2, 1, pal.bellyHi);
+  R(-3 - bib, -23, 6 + bib * 2, 1, pal.bellyLo);
+  R(-2, -27, 4, 3, pal.glass);
+  R(-1, -26, 2, 1, Math.floor(anim / 20) % 2 === 0 ? pal.visorHi : pal.visor);
+  // Brazos a los costados.
+  const fist = mechaZoneColor(pal, coat, 'paw');
+  RS(-13, -30, 5, 4, pal.accent);
+  RS(-13, -30, 5, 1, pal.accentHi);
+  RS(-12, -26, 3, 5, pal.body);
+  RS(-12, -21, 3, 4, pal.accent);
+  RS(-13, -17, 4, 4, fist);
+  RS(-13, -17, 4, 1, mechaLit(pal, fist));
+  R(-2, -32, 4, 2, pal.metalLo);
+  // Cabeza de frente: orejas, visor con dos ojos, hocico y bigotes.
+  mechaEar(R, P, pal, char, -8, -46);
+  mechaEar(R, P, pal, char, 2, -46, { mirror:true });
+  mechaHeadFrontShape(R, RS, pal);
+  if(coat === 'tabby'){ R(-3, -45, 1, 3, pal.coat); R(0, -45, 1, 3, pal.coat); R(2, -45, 1, 3, pal.coat); RS(-8, -38, 2, 1, pal.coat); }
+  if(coat === 'spots'){ RS(-6, -45, 2, 1, pal.coat); PS(-7, -37, pal.coat); }
+  if(coat === 'calico'){ R(-8, -44, 5, 4, pal.coat); }
+  if(coat === 'tortie'){ P(-6, -44, pal.coat); P(4, -43, pal.coat2); P(-7, -38, pal.coat2); }
+  if(coat === 'points') R(-5, -39, 10, 6, pal.coat);
+  R(-2, -47, 4, 2, pal.accent);
+  R(-6, -42, 12, 4, pal.glass);
+  R(-5, -42, 10, 1, pal.glassHi);
+  const blink = (Math.floor(anim) % 170) < 4;
+  if(blink){
+    RS(-5, -40, 3, 1, pal.visor);
+  } else {
+    RS(-5, -41, 3, 2, pal.visor);
+    PS(-4, -41, '#ffffff');
+  }
+  const muzzle = mechaZoneColor(pal, coat, 'mask');
+  R(-3, -37, 6, 4, muzzle);
+  R(-3, -37, 6, 1, mechaLit(pal, muzzle));
+  R(-1, -38, 2, 1, pal.nose);
+  PS(-2, -34, shadeHex(muzzle, 0.62));
+  R(-1, -33, 2, 1, shadeHex(muzzle, 0.62));
+  RS(-8, -38, 3, 3, pal.accent);
+  PS(-8, -38, pal.accentHi);
+  L(-4, -36, -11, -37, pal.metalHi, 1);
+  L(-4, -35, -11, -34, pal.metalHi, 1);
+  L(3, -36, 10, -37, pal.metalHi, 1);
+  L(3, -35, 10, -34, pal.metalHi, 1);
+}
+function drawMechaHDBack(x, y, char, anim){
+  const pal = mechaPalette(char);
+  const coat = char.coat || 'solid';
+  const { R, P, RS, PS } = mechaSymPainter(x, y);
+  ctx.fillStyle = 'rgba(0,0,0,.4)';
+  ctx.beginPath();
+  ctx.ellipse(x, y, 13, 4, 0, 0, TAU);
+  ctx.fill();
+  mechaLegsFront(RS, PS, R, pal, coat, true);
+  R(-8, -18, 16, 4, pal.accent);
+  R(-8, -18, 16, 1, pal.accentHi);
+  R(-8, -15, 16, 1, pal.accentLo);
+  // Espalda con mochila, ventilas y dos toberas.
+  R(-7, -31, 14, 1, pal.bodyHi);
+  R(-8, -30, 16, 12, pal.body);
+  R(-8, -30, 1, 11, pal.bodyHi);
+  R(7, -30, 1, 11, pal.bodyLo);
+  if(coat === 'tabby'){ RS(-8, -29, 3, 1, pal.coat); RS(-8, -21, 3, 1, pal.coat); }
+  if(coat === 'calico'){ R(-8, -30, 4, 4, pal.coat2); R(4, -22, 4, 3, pal.coat); }
+  if(coat === 'spots'){ RS(-8, -27, 2, 2, pal.coat); }
+  if(coat === 'tortie'){ PS(-7, -27, pal.coat); PS(-7, -22, pal.coat2); }
+  R(-5, -29, 10, 10, pal.metal);
+  R(-5, -29, 10, 1, pal.metalHi);
+  R(-5, -20, 10, 1, pal.metalLo);
+  for(let k = 0; k < 3; k++) R(-3, -27 + k * 2, 6, 1, pal.glass);
+  RS(-4, -20, 3, 2, pal.metalLo);
+  RS(-4, -18, 3, 1, pal.glass);
+  const fist = mechaZoneColor(pal, coat, 'paw');
+  RS(-13, -30, 5, 4, pal.accent);
+  RS(-12, -26, 3, 5, pal.body);
+  RS(-12, -21, 3, 4, pal.accent);
+  RS(-13, -17, 4, 4, fist);
+  mechaTailFront(R, P, pal, coat, anim, true);
+  R(-2, -32, 4, 2, pal.metalLo);
+  // Nuca: sin cara, con placa y puerto de datos.
+  const earColor = mechaZoneColor(pal, coat, 'ear');
+  mechaEar(R, P, pal, char, -8, -46, { back:true, color:earColor });
+  mechaEar(R, P, pal, char, 2, -46, { back:true, mirror:true, color:earColor });
+  mechaHeadFrontShape(R, RS, pal);
+  if(coat === 'tabby'){ R(-5, -45, 1, 4, pal.coat); R(-1, -46, 1, 5, pal.coat); R(3, -45, 1, 4, pal.coat); }
+  if(coat === 'calico'){ R(1, -44, 6, 5, pal.coat); }
+  if(coat === 'spots'){ RS(-6, -42, 2, 2, pal.coat); }
+  if(coat === 'tortie'){ P(-5, -42, pal.coat); P(3, -40, pal.coat2); }
+  R(-4, -41, 8, 5, pal.accent);
+  R(-4, -41, 8, 1, pal.accentHi);
+  R(-1, -39, 2, 2, pal.glass);
+  P(-1, -39, pal.visor);
+}
+// Derribado: tendido de lado mirando a la derecha, con los ojos en X.
+function drawMechaHDDown(x, y, char, facing = 1){
+  const pal = mechaPalette(char);
+  const coat = char.coat || 'solid';
+  const { R, P } = mechaPainter(x, y, facing < 0 ? -1 : 1);
+  ctx.fillStyle = 'rgba(0,0,0,.4)';
+  ctx.beginPath();
+  ctx.ellipse(x, y, 20, 5, 0, 0, TAU);
+  ctx.fill();
+  const tail = mechaZoneColor(pal, coat, 'tail');
+  R(-27, -3, 8, 2, tail);
+  R(-29, -4, 3, 2, pal.visorLo);
+  const paw = mechaZoneColor(pal, coat, 'paw');
+  R(-21, -6, 7, 3, pal.accent);
+  R(-24, -6, 4, 4, paw);
+  R(-21, -3, 7, 3, pal.accentLo);
+  R(-24, -3, 4, 3, shadeHex(paw, 0.8));
+  R(-15, -10, 18, 9, pal.body);
+  R(-15, -10, 18, 1, pal.bodyHi);
+  R(-15, -2, 18, 1, pal.bodyLo);
+  if(coat === 'tabby') for(let k = 0; k < 4; k++) R(-13 + k * 4, -10, 1, 5, pal.coat);
+  if(coat === 'calico'){ R(-13, -10, 5, 4, pal.coat); R(-4, -9, 4, 3, pal.coat2); }
+  if(coat === 'spots') for(let k = 0; k < 3; k++) R(-12 + k * 5, -8, 2, 2, pal.coat);
+  R(-6, -8, 6, 5, pal.belly);
+  R(-14, -12, 8, 3, pal.metal);
+  R(-4, -13, 6, 3, pal.body);
+  R(-1, -14, 4, 3, mechaZoneColor(pal, coat, 'paw'));
+  R(3, -14, 14, 12, pal.body);
+  R(3, -14, 14, 1, pal.bodyHi);
+  R(3, -3, 14, 1, pal.bodyLo);
+  R(8, -12, 8, 4, pal.glass);
+  // Ojos en X.
+  P(9, -12, pal.visorLo); P(11, -10, pal.visorLo); P(11, -12, pal.visorLo); P(9, -10, pal.visorLo); P(10, -11, pal.visorLo);
+  P(13, -12, pal.visorLo); P(15, -10, pal.visorLo); P(15, -12, pal.visorLo); P(13, -10, pal.visorLo); P(14, -11, pal.visorLo);
+  R(13, -7, 5, 4, mechaZoneColor(pal, coat, 'mask'));
+  P(17, -7, pal.nose);
+  const ear = mechaZoneColor(pal, coat, 'ear');
+  R(17, -13, 3, 4, ear);
+  R(20, -12, 2, 2, ear);
+  R(17, -6, 3, 3, ear);
+  P(18, -12, pal.earIn);
+}
+// API en unidades 1x del juego (scale = tamaño en pantalla): el arte HD se
+// dibuja escalado por scale / MECHA_HD_SCALE.
+function drawMechaCat(x, y, char, facing, anim, state, frame, scale = 1, move){
+  withSpriteScale(x, y, scale / MECHA_HD_SCALE, () => drawMechaHD(x, y, char, facing, anim, state, frame, move));
+}
+function drawMechaCatDown(x, y, char, scale = 1, facing = 1){
+  withSpriteScale(x, y, scale / MECHA_HD_SCALE, () => drawMechaHDDown(x, y, char, facing));
+}
+/* </mecha-art> */
+</script>
 <script>
 'use strict';
 
@@ -705,11 +1889,14 @@
   ['gesturestart','gesturechange','gestureend'].forEach(eventName => {
     document.addEventListener(eventName, e => e.preventDefault(), { passive:false });
   });
-  // Double-tap zoom: bloquear si los dos taps caen en menos de 300ms
+  // Double-tap zoom: bloquear si los dos taps caen en menos de 300ms.
+  // Solo sobre el mando: en botones de menu cancelar el touchend tambien
+  // cancelaba el click (el menu "no respondia" al tocar rapido).
   let lastTouchEnd = 0;
   document.addEventListener('touchend', e => {
     const now = Date.now();
-    if(now - lastTouchEnd <= 320){ e.preventDefault(); }
+    const onMenu = e.target && e.target.closest && e.target.closest('.chip, .slot, .video-enable, .drawer');
+    if(!onMenu && now - lastTouchEnd <= 320) e.preventDefault();
     lastTouchEnd = now;
   }, { passive:false });
   // touchmove con multiples dedos = pinch zoom; cancelar
@@ -726,8 +1913,6 @@
   if(window.visualViewport){
     window.visualViewport.addEventListener('resize', () => {
       if(window.visualViewport.scale > 1.01){
-        // hint al navegador de que volvamos a 1.0 — no funciona en todos
-        // los browsers, pero ayuda en Android Chrome
         window.scrollTo(0, 0);
       }
     });
@@ -740,6 +1925,7 @@ const CONTROLLER_ID_KEY = 'mechakatz_controller_id';
 const DEVICE_SECRET_KEY = 'mechakatz_device_secret_v1';
 const ONLINE_TICKET_KEY = 'mechakatz_online_ticket_v1';
 const ONLINE_VIEW_KEY = 'mechakatz_online_view_v1';
+const LAYOUT_KEY = 'mechakatz_controller_layout_v1';
 const INPUT_REFRESH_MS = 1000;
 const params = new URLSearchParams(window.location.search);
 const onlineBootstrap = readOnlineBootstrap();
@@ -760,15 +1946,22 @@ let clientSequence = 0;
 let inputFlushQueued = false;
 let lastInputSignature = '';
 let inputRefreshTimer = 0;
+// requestedView = lo que el jugador quiere ('stream' con video, 'controller'
+// solo mando). viewMode = lo que esta activo. Son valores del protocolo.
 let requestedView = onlineMode ? onlineBootstrap.view : 'controller';
 let viewMode = 'controller';
 let allowedViews = ['controller'];
+// Respuestas set_view pendientes: mientras haya una peticion mas nueva en
+// vuelo, se ignoran los ecos viejos del relay (evitaba "rebotes" de vista).
+let pendingViewReplies = 0;
+let videoPausedByBackground = false;
 let rtcIceServers = [];
 let rtcPeer = null;
 let rtcNegotiationId = '';
 let pendingIceNegotiationId = '';
 let pendingIceCandidates = [];
 let rtcFailureTimer = 0;
+let layoutPref = loadLayoutPref();
 const controllerId = getOrCreateControllerId();
 const deviceSecret = onlineMode ? getOrCreateDeviceSecret() : '';
 
@@ -795,14 +1988,29 @@ const slotButtons = [...document.querySelectorAll('.slot')];
 const actionButtons = [...document.querySelectorAll('.button[data-action]')];
 const joystickPad = document.getElementById('joystickPad');
 const joystickStick = document.getElementById('joystickStick');
-const shellEl = document.querySelector('.shell');
-const gameViewEl = document.getElementById('gameView');
+const shellEl = document.getElementById('shell');
+const screenFrameEl = document.getElementById('screenFrame');
 const gameVideoEl = document.getElementById('gameVideo');
 const videoPlaceholderEl = document.getElementById('videoPlaceholder');
-const gameHudEl = document.getElementById('gameHud');
+const videoEnableEl = document.getElementById('videoEnable');
+const miniPilotEl = document.getElementById('miniPilot');
+const miniHpFill = document.getElementById('miniHpFill');
+const miniCoreFill = document.getElementById('miniCoreFill');
+const miniMessageEl = document.getElementById('miniMessage');
 const audioToggleEl = document.getElementById('audioToggle');
-const viewControllerEl = document.getElementById('viewController');
-const viewStreamEl = document.getElementById('viewStream');
+const statusToggleEl = document.getElementById('statusToggle');
+const layoutToggleEl = document.getElementById('layoutToggle');
+const drawerEl = document.getElementById('statusDrawer');
+const drawerScrimEl = document.getElementById('drawerScrim');
+const drawerCloseEl = document.getElementById('drawerClose');
+const videoOnEl = document.getElementById('videoOn');
+const videoOffEl = document.getElementById('videoOff');
+const layoutOptionEls = [...document.querySelectorAll('[data-layout-option]')];
+const pilotBadgeEl = document.getElementById('pilotBadge');
+const themeColorMetaEl = document.getElementById('themeColorMeta');
+// Mismos colores que slotColor() del juego: el mando los usa mientras no
+// sabe que personaje eligio su piloto.
+const SLOT_COLORS = ['#00f0ff', '#ffea00', '#00ff7f', '#ff2e88'];
 
 function normalizeView(value){
   return value === 'stream' ? 'stream' : 'controller';
@@ -878,6 +2086,88 @@ function getOrCreateControllerId(){
   }
 }
 
+// ============================================================
+// FORMATO DEL MANDO (vertical / horizontal)
+// 'auto' sigue la orientacion del telefono. Si se fuerza un formato que
+// no coincide con ella, primero se intenta pantalla completa + bloqueo de
+// orientacion (Android); si el navegador no lo permite, se gira el mando
+// con CSS para poder sostener el telefono de lado igualmente.
+// ============================================================
+function loadLayoutPref(){
+  try {
+    const saved = window.localStorage.getItem(LAYOUT_KEY);
+    return ['auto','portrait','landscape'].includes(saved) ? saved : 'auto';
+  } catch(error){
+    return 'auto';
+  }
+}
+function saveLayoutPref(){
+  try { window.localStorage.setItem(LAYOUT_KEY, layoutPref); } catch(error){}
+}
+function viewportSize(){
+  const vv = window.visualViewport;
+  return {
+    w:Math.round(vv ? vv.width : window.innerWidth),
+    h:Math.round(vv ? vv.height : window.innerHeight)
+  };
+}
+function currentRotation(){
+  if(shellEl.classList.contains('rotate-cw')) return 90;
+  if(shellEl.classList.contains('rotate-ccw')) return -90;
+  return 0;
+}
+function applyLayout(){
+  const { w, h } = viewportSize();
+  const deviceLandscape = w > h;
+  const want = layoutPref === 'auto' ? (deviceLandscape ? 'landscape' : 'portrait') : layoutPref;
+  const needsRotation = (want === 'landscape') !== deviceLandscape;
+  const rootStyle = document.documentElement.style;
+  rootStyle.setProperty('--app-w', `${w}px`);
+  rootStyle.setProperty('--app-h', `${h}px`);
+  rootStyle.setProperty('--shell-w', `${needsRotation ? h : w}px`);
+  rootStyle.setProperty('--shell-h', `${needsRotation ? w : h}px`);
+  shellEl.dataset.layout = want;
+  shellEl.classList.toggle('rotate-cw', needsRotation && want === 'landscape');
+  shellEl.classList.toggle('rotate-ccw', needsRotation && want === 'portrait');
+  layoutToggleEl.textContent = layoutPref === 'auto' ? 'Auto' : (layoutPref === 'landscape' ? 'Horizontal' : 'Vertical');
+  layoutToggleEl.classList.toggle('active', layoutPref !== 'auto');
+  layoutOptionEls.forEach(button => button.classList.toggle('active', button.dataset.layoutOption === layoutPref));
+  resetJoystick();
+}
+async function lockOrientationFor(pref){
+  const orientation = window.screen && window.screen.orientation;
+  try {
+    if(pref === 'auto'){
+      if(orientation && typeof orientation.unlock === 'function') orientation.unlock();
+      if(document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+      return;
+    }
+    if(!orientation || typeof orientation.lock !== 'function') return;
+    if(!document.fullscreenElement && document.documentElement.requestFullscreen){
+      await document.documentElement.requestFullscreen({ navigationUI:'hide' });
+    }
+    await orientation.lock(pref === 'landscape' ? 'landscape' : 'portrait');
+  } catch(error){
+    // Sin pantalla completa u orientacion bloqueable (iOS, algunos
+    // navegadores): el giro por CSS de applyLayout cubre el caso.
+  }
+}
+function setLayoutPref(next){
+  layoutPref = ['auto','portrait','landscape'].includes(next) ? next : 'auto';
+  saveLayoutPref();
+  applyLayout();
+  void lockOrientationFor(layoutPref).then(() => setTimeout(applyLayout, 250));
+}
+
+// ---- Menu ESTADO ----
+function setDrawerOpen(open){
+  const next = !!open;
+  shellEl.classList.toggle('drawer-open', next);
+  statusToggleEl.setAttribute('aria-expanded', next ? 'true' : 'false');
+  drawerEl.setAttribute('aria-hidden', next ? 'false' : 'true');
+  if(next) releaseAll(true);
+}
+
 function slotLabel(idx){
   return `P${idx + 1}`;
 }
@@ -887,16 +2177,50 @@ function getRosterSlot(idx = playerIdx){
 function getPilotState(idx = playerIdx){
   return snapshot && Array.isArray(snapshot.players) ? snapshot.players.find(player => player.pIdx === idx) || null : null;
 }
+function parseHexColor(value){
+  const match = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(value || '').trim());
+  if(!match) return null;
+  const hex = match[1].length === 3 ? match[1].replace(/./g, ch => ch + ch) : match[1];
+  const num = parseInt(hex, 16);
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+function colorLuma(rgb){
+  return (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+}
+function mixColor(rgb, target, t){
+  return rgb.map((value, i) => Math.round(value + (target[i] - value) * t));
+}
+function rgbHex(rgb){
+  return '#' + rgb.map(value => value.toString(16).padStart(2, '0')).join('');
+}
+// Pinta todo el mando con el color del cuerpo del mecha del piloto (el que
+// se ve en la pantalla grande), para que cada quien reconozca el suyo.
 function applyPilotTheme(source){
   const root = document.documentElement.style;
-  const body = source && source.body ? source.body : '#233b52';
-  const accent = source && source.accent ? source.accent : '#ffea00';
-  const visor = source && source.visor ? source.visor : '#00f0ff';
-  root.setProperty('--theme-body', body);
-  root.setProperty('--theme-accent', accent);
-  root.setProperty('--theme-main', visor);
-  root.setProperty('--theme-line', `${visor}44`);
-  root.setProperty('--theme-glow', `${visor}33`);
+  const body = parseHexColor(source && source.body) || parseHexColor(SLOT_COLORS[playerIdx % SLOT_COLORS.length]);
+  // Un cuerpo muy oscuro se aclara lo justo para que bordes y textos se lean.
+  const luma = colorLuma(body);
+  const main = luma < 0.45 ? mixColor(body, [255, 255, 255], (0.45 - luma) / (1 - luma)) : body;
+  const accent = parseHexColor(source && source.visor) || [255, 255, 255];
+  const deep = mixColor(body, [0, 0, 0], 0.78);
+  const rgb = main.join(',');
+  root.setProperty('--theme-main', rgbHex(main));
+  root.setProperty('--theme-body', rgbHex(body));
+  root.setProperty('--theme-accent', rgbHex(accent));
+  root.setProperty('--theme-rgb', rgb);
+  root.setProperty('--theme-deep', rgbHex(deep));
+  root.setProperty('--theme-ink', colorLuma(main) > 0.55 ? '#03070b' : '#ffffff');
+  root.setProperty('--theme-line', `rgba(${rgb},.55)`);
+  root.setProperty('--theme-glow', `rgba(${rgb},.32)`);
+  // Barra del navegador (Android) del mismo tono.
+  if(themeColorMetaEl) themeColorMetaEl.setAttribute('content', rgbHex(deep));
+}
+function refreshPilotIdentity(){
+  const source = getPilotState(playerIdx) || getRosterSlot(playerIdx);
+  applyPilotTheme(source);
+  pilotBadgeEl.textContent = source && source.name
+    ? `${slotLabel(playerIdx)} · ${source.name}`
+    : slotLabel(playerIdx);
 }
 
 function setStatus(text, mode = 'warn'){
@@ -913,6 +2237,8 @@ function setFill(el, value){
 }
 
 function updateSlotUi(){
+  // Color y placa siguen al slot y al personaje que tenga seleccionado.
+  refreshPilotIdentity();
   slotButtons.forEach(button => {
     const slot = parseInt(button.dataset.slot, 10);
     const roster = getRosterSlot(slot);
@@ -921,8 +2247,8 @@ function updateSlotUi(){
     button.classList.toggle('standby', !!(roster && !roster.connected && (roster.ready || roster.active)));
     button.classList.toggle('offline', !roster || (!roster.connected && !roster.ready && !roster.active));
     button.textContent = roster && roster.name ? `${slotLabel(slot)} ${roster.name}` : `Pilot ${slotLabel(slot)}`;
-    button.style.borderColor = roster && roster.visor ? roster.visor : '';
-    button.style.color = playerConfirmed && slot === playerIdx ? '#000' : (roster && roster.visor ? roster.visor : '');
+    button.style.borderColor = roster && roster.body ? roster.body : '';
+    button.style.color = playerConfirmed && slot === playerIdx ? '' : (roster && roster.body ? roster.body : '');
     button.disabled = onlineMode;
     button.title = onlineMode ? (slot === playerIdx && playerConfirmed ? 'Slot asignado por el ticket seguro' : 'Los slots online no se pueden cambiar') : 'Cambiar de piloto LAN';
   });
@@ -1056,12 +2382,17 @@ function updateJoystick(clientX, clientY){
   const rect = joystickPad.getBoundingClientRect();
   const cx = rect.left + rect.width / 2;
   const cy = rect.top + rect.height / 2;
-  const rawX = (clientX - cx) / (rect.width * 0.5);
-  const rawY = (clientY - cy) / (rect.height * 0.5);
+  const screenX = (clientX - cx) / (rect.width * 0.5);
+  const screenY = (clientY - cy) / (rect.height * 0.5);
+  // Con el mando girado por CSS, el desplazamiento en pantalla se lleva a
+  // los ejes propios de la palanca (arriba del mando = arriba del mecha).
+  const rotation = currentRotation();
+  const rawX = rotation === 90 ? screenY : rotation === -90 ? -screenY : screenX;
+  const rawY = rotation === 90 ? -screenX : rotation === -90 ? screenX : screenY;
   const len = Math.hypot(rawX, rawY) || 1;
   const dx = len > 1 ? rawX / len : rawX;
   const dy = len > 1 ? rawY / len : rawY;
-  const travel = Math.min(rect.width, rect.height) * 0.24;
+  const travel = joystickPad.offsetWidth * 0.26;
   joystickPad.classList.add('active');
   joystickStick.style.transform = `translate(-50%,-50%) translate(${Math.round(dx * travel)}px, ${Math.round(dy * travel)}px)`;
   const deadZone = 0.24;
@@ -1102,8 +2433,23 @@ function bindJoystick(){
 
 function setVideoStatus(text, live = false){
   videoPlaceholderEl.textContent = text || 'Esperando video del anfitrion';
-  gameViewEl.classList.toggle('video-live', !!live);
+  screenFrameEl.classList.toggle('video-live', !!live);
 }
+
+// El marco solo pasa a "en vivo" cuando ya hay imagen; antes se ocultaba
+// el estado al recibir la pista y quedaba un rectangulo negro.
+function markVideoIfPlaying(waitingText){
+  if(gameVideoEl.srcObject && gameVideoEl.readyState >= 2 && gameVideoEl.videoWidth > 0){
+    setVideoStatus('Video conectado', true);
+  } else {
+    setVideoStatus(waitingText, false);
+  }
+}
+['loadeddata', 'playing', 'resize'].forEach(eventName => {
+  gameVideoEl.addEventListener(eventName, () => {
+    if(rtcPeer && gameVideoEl.srcObject) markVideoIfPlaying('Recibiendo video');
+  });
+});
 
 function setAudioEnabled(enabled){
   const next = !!enabled;
@@ -1130,6 +2476,27 @@ function rememberView(next){
   } catch(error){}
 }
 
+function streamAvailable(){
+  return onlineMode && allowedViews.includes('stream') && typeof window.RTCPeerConnection === 'function';
+}
+
+// Actualiza botones y textos segun la vista activa y lo que la sala permite.
+function syncViewUi(){
+  const canStream = streamAvailable();
+  const canController = allowedViews.includes('controller') || !onlineMode;
+  videoOnEl.classList.toggle('active', viewMode === 'stream');
+  videoOffEl.classList.toggle('active', viewMode === 'controller');
+  videoOnEl.disabled = !canStream;
+  videoOffEl.disabled = !canController;
+  videoEnableEl.hidden = !(viewMode === 'controller' && canStream);
+  if(viewMode === 'controller'){
+    if(!onlineMode) setVideoStatus('Video solo en salas online. Mira la pantalla principal.', false);
+    else if(!allowedViews.includes('stream')) setVideoStatus('Esta sala transmite solo el control. Mira la pantalla principal.', false);
+    else if(typeof window.RTCPeerConnection !== 'function') setVideoStatus('Este navegador no admite video WebRTC.', false);
+    else setVideoStatus('Video apagado', false);
+  }
+}
+
 function applyViewMode(next, options = {}){
   const notify = options.notify === true;
   const remember = options.remember !== false;
@@ -1141,34 +2508,39 @@ function applyViewMode(next, options = {}){
   if(remember) rememberView(normalized);
 
   shellEl.classList.toggle('view-stream', normalized === 'stream');
-  gameViewEl.setAttribute('aria-hidden', normalized === 'stream' ? 'false' : 'true');
-  viewControllerEl.classList.toggle('active', normalized === 'controller');
-  viewStreamEl.classList.toggle('active', normalized === 'stream');
-  viewStreamEl.disabled = !onlineMode || !allowedViews.includes('stream');
 
   if(normalized === 'controller' && previous === 'stream'){
     stopRtcPeer(notify, 'view_controller');
   } else if(normalized === 'stream' && !rtcPeer){
     setVideoStatus('Esperando video del anfitrion', false);
   }
+  syncViewUi();
 
   if(notify && onlineMode && connectionReady){
+    pendingViewReplies += 1;
     send({ type:'set_view', viewMode:normalized });
   }
 }
 
-function updateGameHud(){
-  if(!snapshot){
-    gameHudEl.textContent = 'Sin telemetria';
-    return;
+function requestVideo(enabled){
+  if(enabled){
+    if(!streamAvailable()){
+      syncViewUi();
+      return;
+    }
+    applyViewMode('stream', { notify:true });
+  } else {
+    applyViewMode('controller', { notify:true, force:true });
   }
+}
+
+function updateMiniStatus(){
   const pilot = getPilotState(playerIdx);
-  const boss = snapshot.boss;
-  const pilotText = pilot
-    ? ((pilot.name || slotLabel(playerIdx)) + ' · HP ' + pilot.hp + '/' + pilot.maxHp + ' · CORE ' + pilot.special + '/' + pilot.maxSpecial)
-    : ('Piloto ' + slotLabel(playerIdx) + ' · esperando partida');
-  const bossText = boss ? (' · BOSS ' + boss.hp + '/' + boss.maxHp) : '';
-  gameHudEl.textContent = pilotText + bossText;
+  const roster = getRosterSlot(playerIdx);
+  miniPilotEl.textContent = `${(pilot || roster || {}).name || 'Pilot'} / ${slotLabel(playerIdx)}`;
+  setFill(miniHpFill, pilot ? ratio(pilot.hp, pilot.maxHp) : 0);
+  setFill(miniCoreFill, pilot ? ratio(pilot.special, pilot.maxSpecial) : 0);
+  miniMessageEl.textContent = messageEl.textContent;
 }
 
 function clearRtcFailureTimer(){
@@ -1203,11 +2575,30 @@ function stopRtcPeer(notify = false, reason = 'closed'){
   }
 }
 
+// El video fallo: se vuelve a "solo mando" si la sala lo permite. En salas
+// que solo transmiten video no se pide otro modo al relay (volveria a
+// forzar el video en bucle); solo se avisa.
 function fallbackToController(message){
-  stopRtcPeer(true, 'fallback');
-  applyViewMode('controller', { notify:true, force:true });
+  if(allowedViews.includes('controller')){
+    stopRtcPeer(true, 'fallback');
+    applyViewMode('controller', { notify:true, force:true });
+  } else {
+    stopRtcPeer(false, 'fallback');
+  }
+  setVideoStatus(message || 'Video no disponible. Los controles siguen conectados.', false);
   warningStatusEl.textContent = message || 'Video no disponible. Los controles siguen conectados.';
   messageEl.textContent = message || 'Video no disponible; usa la salida principal.';
+  syncViewUi();
+}
+
+// Pide el minimo bufer de reproduccion: para un mando, mas vale un cuadro
+// salteado que ver el juego tarde. Los navegadores sin soporte lo ignoran.
+function requestLowLatencyPlayout(receiver){
+  if(!receiver) return;
+  try {
+    if('jitterBufferTarget' in receiver) receiver.jitterBufferTarget = 0;
+    else if('playoutDelayHint' in receiver) receiver.playoutDelayHint = 0;
+  } catch(error){}
 }
 
 function ensureRtcPeer(negotiationId){
@@ -1228,18 +2619,22 @@ function ensureRtcPeer(negotiationId){
   };
   peer.ontrack = event => {
     if(peer !== rtcPeer) return;
-    const stream = event.streams && event.streams[0]
-      ? event.streams[0]
-      : new MediaStream([event.track]);
-    gameVideoEl.srcObject = stream;
+    requestLowLatencyPlayout(event.receiver);
+    // El anfitrion manda video y audio en streams separados (asi no se
+    // sincronizan y el video no espera al audio); aqui se juntan en uno
+    // solo para el <video>, reemplazando la pista previa del mismo tipo.
+    const previous = gameVideoEl.srcObject instanceof MediaStream ? gameVideoEl.srcObject.getTracks() : [];
+    const tracks = previous.filter(track => track.kind !== event.track.kind);
+    tracks.push(event.track);
+    gameVideoEl.srcObject = new MediaStream(tracks);
     gameVideoEl.play().catch(() => {});
-    setVideoStatus('Video conectado', true);
+    markVideoIfPlaying('Recibiendo video');
   };
   peer.onconnectionstatechange = () => {
     if(peer !== rtcPeer) return;
     clearRtcFailureTimer();
     if(peer.connectionState === 'connected'){
-      setVideoStatus('Video conectado', true);
+      markVideoIfPlaying('Esperando imagen del anfitrion');
       return;
     }
     if(peer.connectionState === 'failed'){
@@ -1316,18 +2711,18 @@ function handleWebRtcIce(payload){
 function renderSnapshot(){
   const roster = getRosterSlot(playerIdx);
   const pilot = getPilotState(playerIdx);
-  applyPilotTheme(pilot || roster);
   updateSlotUi();
-  updateGameHud();
 
   if(!snapshot){
     pilotNameEl.textContent = `Pilot ${slotLabel(playerIdx)}`;
     stageTagEl.textContent = 'Awaiting host';
     messageEl.textContent = 'Awaiting mecha telemetry';
+    updateMiniStatus();
     return;
   }
   pilotNameEl.textContent = `${(pilot || roster || {}).name || 'Pilot Link'} / ${slotLabel(playerIdx)}`;
   stageTagEl.textContent = `${snapshot.stageTag || 'STAGE'} / ${snapshot.state || 'IDLE'}`;
+  let alert = false;
   if(!pilot){
     hpText.textContent = '--';
     shieldText.textContent = '--';
@@ -1356,10 +2751,12 @@ function renderSnapshot(){
       repairText.textContent = `${pilot.repairSeconds.toFixed(1)}s`;
       setFill(repairFill, pilot.repairRatio || 0);
       warningStatusEl.textContent = 'Repair required. El mecha vivo debe mantener SYSTEM cerca del aliado.';
+      alert = true;
     } else if(pilot.repairState === 'destroyed'){
       repairText.textContent = 'Offline';
       setFill(repairFill, 0);
       warningStatusEl.textContent = 'Critical loss. Esta unidad ya no puede volver.';
+      alert = true;
     } else {
       repairText.textContent = 'OK';
       setFill(repairFill, pilot.repairProgress || 1);
@@ -1368,14 +2765,552 @@ function renderSnapshot(){
     messageEl.textContent = snapshot.message || (pilot.repairState === 'downed' ? 'Repair frame compromised' : 'Systems nominal');
     telemetryEl.textContent = `Down count ${pilot.downCount} | Core ${pilot.special}/${pilot.maxSpecial} | Shield ${pilot.shield}/${pilot.maxShield}`;
   }
+  // Punto rojo en ESTADO cuando hay algo que atender (mecha caido).
+  statusToggleEl.classList.toggle('alert', alert);
 
   const boss = snapshot.boss;
   if(boss){
-    bossStatusEl.textContent = `${boss.head2Active ? 'Head 2' : 'Head 1'} / HP ${boss.hp}/${boss.maxHp}${boss.airborne ? ' / Air' : ''}`;
+    const bossPhase = boss.phaseLabel || (boss.head2Active ? 'Head 2' : 'Head 1');
+    bossStatusEl.textContent = `${boss.name ? boss.name + ' ' : ''}${bossPhase} / HP ${boss.hp}/${boss.maxHp}${boss.airborne ? ' / Air' : ''}`;
   } else {
     bossStatusEl.textContent = 'No target';
   }
   hostStatusEl.textContent = snapshot.stageName ? `${snapshot.stageName} / ${snapshot.state}` : 'Host waiting';
+  updateMiniStatus();
+  updateScanner();
+}
+
+// ============================================================
+// ESCANER DE DIGITALIZACION (seleccion de personaje)
+// Mientras el anfitrion esta en la pantalla de seleccion, el marco del juego
+// muestra el mecha que este piloto tiene en la mira: se materializa bajo un
+// haz de escaneo y gira 360° sobre una tornamesa en SCAN_SPIN_SECONDS, con
+// graficas de sus stats, ficha tecnica y garabatos a mano. Los mechas son
+// el mismo arte del juego (bloque <mecha-art>). Se reinicia al cambiar de
+// mecha y estampa LISTO al confirmar.
+// ============================================================
+let ctx = null;
+const SCAN_SPIN_SECONDS = 5;
+const SCAN_MATERIALIZE_SECONDS = 1.4;
+const SCAN_HAND_FONT = '"Segoe Print","Bradley Hand","Marker Felt","Comic Sans MS",cursive';
+const SCAN_MONO_FONT = 'Consolas,"Courier New",monospace';
+const scanCanvasEl = document.getElementById('scanView');
+const scanCtx = scanCanvasEl.getContext('2d');
+const scanSprite = document.createElement('canvas');
+scanSprite.width = 96;
+scanSprite.height = 76;
+const scanSpriteCtx = scanSprite.getContext('2d', { willReadFrequently:true });
+const scanState = { visible:false, key:'', start:0, raf:0, ready:false, readyAt:0, char:null, stats:null, color:'#00f0ff', seed:1 };
+
+function scanSeedOf(text){
+  let h = 2166136261;
+  for(let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+function scanRandom(seed){
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function scanEase(value){
+  const x = Math.max(0, Math.min(1, value));
+  return 1 - Math.pow(1 - x, 3);
+}
+function scanCharFromRoster(roster){
+  const num = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
+  return {
+    name:String(roster.name || 'MECHA'),
+    body:roster.body, accent:roster.accent, visor:roster.visor,
+    coat:roster.coat || 'solid', coatColor:roster.coatColor, coatColor2:roster.coatColor2,
+    belly:roster.belly, ears:roster.ears || 'normal', fx:roster.fx,
+    stat:String(roster.stat || ''), special:String(roster.special || ''),
+    hp:num(roster.hp, 100), spd:num(roster.spd, 2), atk:num(roster.atk, 10),
+    lightDmg:num(roster.lightDmg, 10), heavyDmg:num(roster.heavyDmg, 18), specialDmg:num(roster.specialDmg, 40),
+    charIdx:num(roster.charIdx, 0), charTotal:num(roster.charTotal, 1)
+  };
+}
+function updateScanner(){
+  const roster = getRosterSlot(playerIdx);
+  const show = !!(snapshot && snapshot.state === 'select' && roster && roster.active && roster.body);
+  if(!show){
+    if(scanState.visible) hideScanner();
+    return;
+  }
+  const char = scanCharFromRoster(roster);
+  const key = [char.charIdx, char.name, char.body, char.accent, char.visor, char.coat, char.coatColor, char.coatColor2, char.belly, char.ears].join('|');
+  if(key !== scanState.key){
+    scanState.key = key;
+    scanState.start = performance.now();
+    scanState.seed = scanSeedOf(key);
+    scanState.color = getComputedStyle(document.documentElement).getPropertyValue('--theme-main').trim() || '#00f0ff';
+  }
+  const ready = !!roster.ready;
+  if(ready && !scanState.ready){
+    scanState.readyAt = performance.now();
+    if(navigator.vibrate) navigator.vibrate([24, 50, 24]);
+  }
+  scanState.ready = ready;
+  scanState.char = char;
+  scanState.stats = snapshot.charStats || null;
+  if(!scanState.visible){
+    scanState.visible = true;
+    scanCanvasEl.hidden = false;
+    scanState.raf = requestAnimationFrame(scanFrame);
+  }
+}
+function hideScanner(){
+  scanState.visible = false;
+  scanState.key = '';
+  scanCanvasEl.hidden = true;
+  cancelAnimationFrame(scanState.raf);
+}
+function scanFrame(now){
+  if(!scanState.visible) return;
+  scanState.raf = requestAnimationFrame(scanFrame);
+  drawScanner(now);
+}
+// Mecha a resolucion nativa en su lienzo (con contorno HD). Devuelve el
+// aplastado horizontal de la vista para simular el giro.
+function renderScanSprite(char, angle, anim){
+  const a = ((angle % 360) + 360) % 360;
+  const quarter = Math.round(a / 90) % 4;
+  const delta = (a - quarter * 90) * Math.PI / 180;
+  scanSpriteCtx.setTransform(1, 0, 0, 1, 0, 0);
+  scanSpriteCtx.clearRect(0, 0, scanSprite.width, scanSprite.height);
+  const oldCtx = ctx;
+  ctx = scanSpriteCtx;
+  try {
+    if(quarter === 0) drawMechaHD(48, 70, char, 1, anim, 'idle', 0);
+    else if(quarter === 1) drawMechaHDFront(48, 70, char, anim);
+    else if(quarter === 2) drawMechaHD(48, 70, char, -1, anim, 'idle', 0);
+    else drawMechaHDBack(48, 70, char, anim);
+  } finally {
+    ctx = oldCtx;
+  }
+  const image = scanSpriteCtx.getImageData(0, 0, scanSprite.width, scanSprite.height);
+  hdEnhanceSprite(image, MECHA_HD_PASS);
+  scanSpriteCtx.putImageData(image, 0, 0);
+  return Math.max(0.12, Math.abs(Math.cos(delta * 2)));
+}
+// Trazo a mano alzada dibujado hasta 'progress' (0..1) de su largo.
+function scanStroke(g, points, progress){
+  if(progress <= 0 || points.length < 2) return;
+  let total = 0;
+  for(let i = 1; i < points.length; i++) total += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+  let left = total * Math.min(1, progress);
+  g.beginPath();
+  g.moveTo(points[0][0], points[0][1]);
+  for(let i = 1; i < points.length && left > 0; i++){
+    const [x0, y0] = points[i - 1];
+    const [x1, y1] = points[i];
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    const f = len > 0 ? Math.min(1, left / len) : 1;
+    g.lineTo(x0 + (x1 - x0) * f, y0 + (y1 - y0) * f);
+    left -= len;
+  }
+  g.stroke();
+}
+function scanLoop(rand, cx, cy, rx, ry){
+  const pts = [];
+  const start = rand() * Math.PI * 2;
+  const turns = Math.PI * 2 + 0.5;
+  for(let k = 0; k <= 30; k++){
+    const a = start + turns * k / 30;
+    const wobble = 1 + (rand() - 0.5) * 0.12;
+    pts.push([cx + Math.cos(a) * rx * wobble, cy + Math.sin(a) * ry * wobble]);
+  }
+  return pts;
+}
+function scanArrow(rand, x0, y0, x1, y1){
+  const pts = [];
+  const bend = (rand() - 0.5) * 0.35;
+  const mx = (x0 + x1) / 2 - (y1 - y0) * bend;
+  const my = (y0 + y1) / 2 + (x1 - x0) * bend;
+  for(let k = 0; k <= 12; k++){
+    const t = k / 12;
+    pts.push([(1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * mx + t * t * x1, (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * my + t * t * y1]);
+  }
+  const ang = Math.atan2(y1 - my, x1 - mx);
+  const head = Math.hypot(x1 - x0, y1 - y0) * 0.18 + 4;
+  pts.push([x1 - Math.cos(ang - 0.5) * head, y1 - Math.sin(ang - 0.5) * head]);
+  pts.push([x1, y1]);
+  pts.push([x1 - Math.cos(ang + 0.5) * head, y1 - Math.sin(ang + 0.5) * head]);
+  return pts;
+}
+// Nota manuscrita; maxX evita que invada la ficha tecnica.
+function scanHandText(g, text, x, y, size, color, progress, tilt, maxX = Infinity){
+  if(progress <= 0) return;
+  const shown = text.slice(0, Math.ceil(text.length * Math.min(1, progress)));
+  g.save();
+  g.font = `bold ${size}px ${SCAN_HAND_FONT}`;
+  x = Math.max(2, Math.min(x, maxX - g.measureText(text).width));
+  g.translate(x, y);
+  g.rotate(tilt);
+  g.font = `bold ${size}px ${SCAN_HAND_FONT}`;
+  g.fillStyle = color;
+  g.fillText(shown, 0, 0);
+  g.restore();
+}
+function scanEarNote(ears){
+  if(ears === 'big') return '¡orejotas de radar!';
+  if(ears === 'fold') return 'orejas plegadas ♥';
+  if(ears === 'tuft') return 'penachos de lince';
+  return 'orejas-sensor';
+}
+function scanStatRatio(stats, key, value){
+  const range = stats && Array.isArray(stats[key]) ? stats[key] : null;
+  if(!range) return 0.6;
+  const span = range[1] - range[0];
+  return span > 0 ? Math.max(0.08, Math.min(1, 0.25 + 0.75 * (value - range[0]) / span)) : 0.7;
+}
+function drawScanner(now){
+  const cssW = scanCanvasEl.clientWidth;
+  const cssH = scanCanvasEl.clientHeight;
+  if(cssW < 20 || cssH < 20 || !scanState.char) return;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const pw = Math.round(cssW * dpr);
+  const ph = Math.round(cssH * dpr);
+  if(scanCanvasEl.width !== pw || scanCanvasEl.height !== ph){
+    scanCanvasEl.width = pw;
+    scanCanvasEl.height = ph;
+  }
+  const g = scanCtx;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.imageSmoothingEnabled = false;
+  const Wc = cssW;
+  const Hc = cssH;
+  const t = (now - scanState.start) / 1000;
+  const char = scanState.char;
+  const color = scanState.color;
+  const rand = scanRandom(scanState.seed);
+  const mono = size => `${size}px ${SCAN_MONO_FONT}`;
+
+  // Fondo, piso en perspectiva y esquinas de HUD.
+  g.fillStyle = '#030713';
+  g.fillRect(0, 0, Wc, Hc);
+  const glow = g.createRadialGradient(Wc * 0.27, Hc * 0.55, 4, Wc * 0.27, Hc * 0.55, Wc * 0.36);
+  glow.addColorStop(0, 'rgba(40,120,200,.22)');
+  glow.addColorStop(1, 'rgba(3,7,19,0)');
+  g.fillStyle = glow;
+  g.fillRect(0, 0, Wc, Hc);
+  const cx = Wc * 0.27;
+  const feetY = Hc * 0.86;
+  g.strokeStyle = color;
+  g.globalAlpha = 0.14;
+  g.lineWidth = 1;
+  for(let k = 0; k < 7; k++){
+    const y = Hc * 0.62 + Math.pow(k / 6, 1.7) * Hc * 0.38;
+    g.beginPath();
+    g.moveTo(0, y);
+    g.lineTo(Wc * 0.54, y);
+    g.stroke();
+  }
+  for(let k = -6; k <= 6; k++){
+    g.beginPath();
+    g.moveTo(cx + k * Wc * 0.012, Hc * 0.62);
+    g.lineTo(cx + k * Wc * 0.08, Hc);
+    g.stroke();
+  }
+  g.globalAlpha = 0.9;
+  g.lineWidth = 2;
+  const corner = Math.min(Wc, Hc) * 0.07;
+  [[4, 4, 1, 1], [Wc - 4, 4, -1, 1], [4, Hc - 4, 1, -1], [Wc - 4, Hc - 4, -1, -1]].forEach(([x, y, sx, sy]) => {
+    g.beginPath();
+    g.moveTo(x, y + corner * sy);
+    g.lineTo(x, y);
+    g.lineTo(x + corner * sx, y);
+    g.stroke();
+  });
+  g.globalAlpha = 1;
+
+  // Tornamesa con marcas que giran.
+  const angle = ((t / SCAN_SPIN_SECONDS) * 360) % 360;
+  const rx = Wc * 0.15;
+  const ry = rx * 0.2;
+  g.lineWidth = 1.5;
+  g.strokeStyle = color;
+  g.globalAlpha = 0.85;
+  g.beginPath();
+  g.ellipse(cx, feetY + 2, rx, ry, 0, 0, Math.PI * 2);
+  g.stroke();
+  g.globalAlpha = 0.5;
+  g.setLineDash([6, 9]);
+  g.lineDashOffset = -t * 40;
+  g.beginPath();
+  g.ellipse(cx, feetY + 2, rx * 0.78, ry * 0.78, 0, 0, Math.PI * 2);
+  g.stroke();
+  g.setLineDash([]);
+  g.globalAlpha = 1;
+
+  // El mecha: se materializa de arriba abajo y gira 360° en SCAN_SPIN_SECONDS.
+  const squash = renderScanSprite(char, angle, t * 60);
+  const k = (Hc * 0.66) / 60;
+  const dw = scanSprite.width * k * squash;
+  const dh = scanSprite.height * k;
+  const dx = cx - dw / 2;
+  const dy = feetY - 70 * k;
+  const reveal = t < SCAN_MATERIALIZE_SECONDS ? scanEase(t / SCAN_MATERIALIZE_SECONDS) : 1;
+  const cut = dy + dh * reveal;
+  g.save();
+  g.beginPath();
+  g.rect(0, 0, Wc, cut);
+  g.clip();
+  g.shadowColor = color;
+  g.shadowBlur = 14;
+  g.drawImage(scanSprite, dx, dy, dw, dh);
+  g.restore();
+  if(reveal < 1){
+    g.save();
+    g.beginPath();
+    g.rect(0, cut, Wc, Hc);
+    g.clip();
+    g.globalAlpha = 0.16;
+    g.drawImage(scanSprite, dx, dy, dw, dh);
+    g.globalAlpha = 0.35;
+    g.fillStyle = color;
+    for(let y = cut; y < dy + dh; y += 4) g.fillRect(dx, y, dw, 1);
+    g.restore();
+  }
+  // Haz de escaneo: barre al materializar y luego cada 2.2 s.
+  const sweep = reveal < 1 ? cut : dy + dh * (((t - SCAN_MATERIALIZE_SECONDS) % 2.2) / 2.2);
+  const beam = g.createLinearGradient(0, sweep - 18, 0, sweep + 2);
+  beam.addColorStop(0, 'rgba(0,240,255,0)');
+  beam.addColorStop(1, 'rgba(160,250,255,.55)');
+  g.fillStyle = beam;
+  g.fillRect(cx - Wc * 0.16, sweep - 18, Wc * 0.32, 20);
+  g.fillStyle = '#e8feff';
+  g.fillRect(cx - Wc * 0.16, sweep, Wc * 0.32, 1.5);
+  g.font = mono(Math.max(8, Hc * 0.04));
+  g.fillStyle = color;
+  g.textAlign = 'right';
+  g.fillText(`ROT ${String(Math.round(angle)).padStart(3, '0')}°`, Wc * 0.52, Hc * 0.09);
+  g.textAlign = 'left';
+
+  // Grafica de radar con las seis stats.
+  const stats = scanState.stats;
+  const axes = [
+    ['VEL', scanStatRatio(stats, 'spd', char.spd)],
+    ['VIDA', scanStatRatio(stats, 'hp', char.hp)],
+    ['ATQ', scanStatRatio(stats, 'atk', char.atk)],
+    ['GLP', scanStatRatio(stats, 'lightDmg', char.lightDmg)],
+    ['PES', scanStatRatio(stats, 'heavyDmg', char.heavyDmg)],
+    ['NUC', scanStatRatio(stats, 'specialDmg', char.specialDmg)]
+  ];
+  const rr = Math.min(Wc * 0.055, Hc * 0.13);
+  const rcx = rr + Hc * 0.07;
+  const rcy = rr + Hc * 0.08;
+  const grow = scanEase((t - 0.8) / 1.0);
+  g.lineWidth = 1;
+  g.strokeStyle = 'rgba(160,220,255,.35)';
+  for(const ring of [0.5, 1]){
+    g.beginPath();
+    axes.forEach((axis, i) => {
+      const a = -Math.PI / 2 + i * Math.PI / 3;
+      const x = rcx + Math.cos(a) * rr * ring;
+      const y = rcy + Math.sin(a) * rr * ring;
+      if(i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    });
+    g.closePath();
+    g.stroke();
+  }
+  g.beginPath();
+  axes.forEach(([label, value], i) => {
+    const a = -Math.PI / 2 + i * Math.PI / 3;
+    const x = rcx + Math.cos(a) * rr * value * grow;
+    const y = rcy + Math.sin(a) * rr * value * grow;
+    if(i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+  });
+  g.closePath();
+  g.globalAlpha = 0.35;
+  g.fillStyle = color;
+  g.fill();
+  g.globalAlpha = 1;
+  g.strokeStyle = color;
+  g.stroke();
+  g.font = mono(Math.max(7, Hc * 0.032));
+  g.fillStyle = 'rgba(200,236,255,.8)';
+  g.textAlign = 'center';
+  axes.forEach(([label], i) => {
+    const a = -Math.PI / 2 + i * Math.PI / 3;
+    g.fillText(label, rcx + Math.cos(a) * (rr + Hc * 0.04), rcy + Math.sin(a) * (rr + Hc * 0.04) + 3);
+  });
+  g.textAlign = 'left';
+
+  // Ficha tecnica: encabezado, nombre y lineas que se teclean solas.
+  const x0 = Wc * 0.56;
+  const panelW = Wc * 0.41;
+  const small = Math.max(8, Hc * 0.042);
+  g.font = mono(small);
+  g.fillStyle = 'rgba(160,220,255,.7)';
+  g.fillText(`ESCANER MK-${String(char.charIdx + 1).padStart(2, '0')}/${String(char.charTotal).padStart(2, '0')}`, x0, Hc * 0.09);
+  g.textAlign = 'right';
+  g.fillStyle = reveal < 1 ? '#ffe14a' : '#3dff8a';
+  g.fillText(reveal < 1 ? `DIGITALIZANDO ${Math.floor(reveal * 100)}%` : 'COMPLETO', x0 + panelW, Hc * 0.09);
+  g.textAlign = 'left';
+  const nameSize = Math.max(12, Hc * 0.1);
+  g.font = `bold ${nameSize}px ${SCAN_MONO_FONT}`;
+  g.fillStyle = color;
+  const typed = (text, delay, speed = 22) => text.slice(0, Math.max(0, Math.floor((t - delay) * speed)));
+  g.fillText(typed(char.name, 0.25, 14), x0, Hc * 0.2);
+  const nameW = Math.min(panelW * 0.8, g.measureText(char.name).width);
+  const lineSize = Math.max(8, Hc * 0.05);
+  g.font = mono(lineSize);
+  const specs = [
+    ['CLASE', char.stat],
+    ['ESPECIAL', char.special],
+    ['PELAJE', mechaCoatLabel(char.coat).toUpperCase()],
+    ['OREJAS', mechaEarsLabel(char.ears).toUpperCase()]
+  ];
+  specs.forEach(([label, value], i) => {
+    const y = Hc * (0.29 + i * 0.066);
+    g.fillStyle = 'rgba(160,220,255,.7)';
+    g.fillText(typed(`${label}:`, 0.45 + i * 0.18), x0, y);
+    g.fillStyle = '#eafcff';
+    g.fillText(typed(value, 0.55 + i * 0.18), x0 + lineSize * 5.4, y);
+  });
+
+  // Barras segmentadas con los valores reales.
+  const bars = [
+    ['VIDA', char.hp, scanStatRatio(stats, 'hp', char.hp), '#3dff8a'],
+    ['VEL', char.spd.toFixed(1), scanStatRatio(stats, 'spd', char.spd), '#00f0ff'],
+    ['ATQ', char.atk, scanStatRatio(stats, 'atk', char.atk), '#ff5fa2'],
+    ['GOLPE', char.lightDmg, scanStatRatio(stats, 'lightDmg', char.lightDmg), '#ffb03a'],
+    ['PESADO', char.heavyDmg, scanStatRatio(stats, 'heavyDmg', char.heavyDmg), '#ff7a3a'],
+    ['NUCLEO', char.specialDmg, scanStatRatio(stats, 'specialDmg', char.specialDmg), '#b88aff']
+  ];
+  const barSize = Math.max(7, Hc * 0.038);
+  const barX = x0 + panelW * 0.26;
+  const barW = panelW * 0.56;
+  const segs = 12;
+  bars.forEach(([label, value, ratio, barColor], i) => {
+    const y = Hc * (0.575 + i * 0.058);
+    const fill = ratio * scanEase((t - 0.6 - i * 0.09) / 0.7);
+    g.font = mono(barSize);
+    g.fillStyle = 'rgba(160,220,255,.75)';
+    g.fillText(label, x0, y);
+    for(let s = 0; s < segs; s++){
+      const on = (s + 1) / segs <= fill + 0.001;
+      g.fillStyle = on ? barColor : 'rgba(255,255,255,.08)';
+      g.fillRect(barX + s * (barW / segs), y - barSize * 0.75, barW / segs - 2, barSize * 0.7);
+    }
+    g.fillStyle = '#eafcff';
+    g.textAlign = 'right';
+    if(fill > 0.02) g.fillText(String(value), x0 + panelW, y);
+    g.textAlign = 'left';
+  });
+
+  // Osciloscopio de la señal del nucleo.
+  const scopeY = Hc * 0.94;
+  g.strokeStyle = color;
+  g.globalAlpha = 0.8;
+  g.lineWidth = 1.2;
+  g.beginPath();
+  for(let s = 0; s <= 60; s++){
+    const x = x0 + panelW * 0.26 + (panelW * 0.74) * s / 60;
+    const y = scopeY + Math.sin(s * 0.55 + t * 9) * Hc * 0.018 + Math.sin(s * 1.7 - t * 5) * Hc * 0.008;
+    if(s === 0) g.moveTo(x, y); else g.lineTo(x, y);
+  }
+  g.stroke();
+  g.globalAlpha = 1;
+  g.font = mono(barSize);
+  g.fillStyle = 'rgba(160,220,255,.75)';
+  g.fillText('SEÑAL', x0, scopeY + barSize * 0.35);
+
+  // Garabatos a mano: circulo en la cabeza, flechas y notas, subrayado y doodles.
+  const marker = '#ffe14a';
+  const pink = '#ff5fa2';
+  const hand = Math.max(10, Hc * 0.058);
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+  g.lineWidth = Math.max(1.5, Hc * 0.009);
+  const at = (delay, dur = 0.6) => scanEase((t - delay) / dur);
+  const stageRight = Wc * 0.53;
+  const headY = dy + 24 * k;
+  g.strokeStyle = pink;
+  scanStroke(g, scanLoop(rand, cx + 3 * k, headY, 19 * k, 15 * k), at(1.5));
+  g.strokeStyle = marker;
+  // Orejas: nota arriba a la derecha de la cabeza.
+  const earX = Math.min(cx + 22 * k, stageRight - Wc * 0.05);
+  scanStroke(g, scanArrow(rand, earX, headY - 16 * k, cx + 16 * k, headY - 8 * k), at(1.8, 0.4));
+  scanHandText(g, scanEarNote(char.ears), earX - 6 * k, headY - 19 * k, hand, marker, at(1.9, 0.8), -0.06, stageRight);
+  // Garras: nota a media altura, a la derecha del cuerpo.
+  const clawY = feetY - 12 * k;
+  scanStroke(g, scanArrow(rand, Math.min(cx + 30 * k, stageRight - Wc * 0.04), clawY - 3 * k, cx + 13 * k, feetY - 22 * k), at(2.4, 0.4));
+  scanHandText(g, '¡garras de titanio!', cx + 18 * k, clawY + 3 * k, hand * 0.85, marker, at(2.5, 0.8), 0.04, stageRight);
+  // Cola: nota bajo el radar, flecha hacia la cola.
+  const tailY = rcy + rr + Hc * 0.2;
+  scanStroke(g, scanArrow(rand, Wc * 0.06, tailY + Hc * 0.02, cx - 15 * k, feetY - 32 * k), at(3.0, 0.4));
+  scanHandText(g, 'cola estabilizadora', Wc * 0.012, tailY, hand * 0.8, marker, at(3.1, 0.8), -0.08, stageRight);
+  // Subrayado del nombre y estrella.
+  g.strokeStyle = pink;
+  const underline = [];
+  for(let s = 0; s <= 14; s++) underline.push([x0 + nameW * s / 14, Hc * 0.225 + Math.sin(s * 1.3 + scanState.seed) * 1.6]);
+  scanStroke(g, underline, at(1.2, 0.5));
+  const starX = x0 + nameW + nameSize * 0.7;
+  const starY = Hc * 0.16;
+  const star = [];
+  for(let s = 0; s <= 5; s++){
+    const a = -Math.PI / 2 + s * (Math.PI * 4 / 5);
+    star.push([starX + Math.cos(a) * nameSize * 0.45, starY + Math.sin(a) * nameSize * 0.45]);
+  }
+  scanStroke(g, star, at(3.5, 0.5));
+  // Huella de gato junto a la tornamesa.
+  if(t > 3.9){
+    g.fillStyle = pink;
+    g.globalAlpha = Math.min(1, (t - 3.9) * 2) * 0.85;
+    const pxp = cx + rx + Wc * 0.02;
+    const pyp = feetY - Hc * 0.02;
+    const pr = Math.max(2.5, Hc * 0.014);
+    g.beginPath();
+    g.ellipse(pxp, pyp, pr * 1.5, pr * 1.2, 0, 0, Math.PI * 2);
+    g.fill();
+    [[-1.6, -1.8], [-0.55, -2.5], [0.55, -2.5], [1.6, -1.8]].forEach(([ox, oy]) => {
+      g.beginPath();
+      g.arc(pxp + ox * pr, pyp + oy * pr, pr * 0.55, 0, Math.PI * 2);
+      g.fill();
+    });
+    g.globalAlpha = 1;
+  }
+
+  // Sello de LISTO al confirmar.
+  if(scanState.ready){
+    const age = (now - scanState.readyAt) / 1000;
+    const pop = 1 + Math.max(0, 0.35 - age) * 2.2;
+    g.save();
+    g.translate(x0 + panelW * 0.55, Hc * 0.44);
+    g.rotate(-0.2);
+    g.scale(pop, pop);
+    g.globalAlpha = 0.92;
+    g.strokeStyle = '#3dff8a';
+    g.fillStyle = 'rgba(0,40,20,.55)';
+    const sw = panelW * 0.62;
+    const sh = Hc * 0.2;
+    g.fillRect(-sw / 2, -sh / 2, sw, sh);
+    g.lineWidth = 3;
+    g.strokeRect(-sw / 2, -sh / 2, sw, sh);
+    g.lineWidth = 1;
+    g.strokeRect(-sw / 2 + 5, -sh / 2 + 5, sw - 10, sh - 10);
+    g.fillStyle = '#3dff8a';
+    g.textAlign = 'center';
+    g.font = `bold ${Math.max(14, Hc * 0.1)}px ${SCAN_MONO_FONT}`;
+    g.fillText('LISTO', 0, Hc * 0.025);
+    g.font = mono(Math.max(7, Hc * 0.035));
+    g.fillText('MECHA CONFIRMADO', 0, sh / 2 - 9);
+    g.restore();
+    g.textAlign = 'left';
+  } else if(Math.floor(t * 2) % 2 === 0){
+    g.font = mono(Math.max(7, Hc * 0.036));
+    g.fillStyle = 'rgba(234,252,255,.75)';
+    g.fillText('◀ ▶ CAMBIA  ·  STRIKE CONFIRMA', Wc * 0.02, Hc * 0.975);
+  }
+
+  // Lineas de barrido CRT.
+  g.fillStyle = 'rgba(0,0,0,.18)';
+  for(let y = 0; y < Hc; y += 3) g.fillRect(0, y, Wc, 1);
 }
 
 function clearStoredOnlineTicket(){
@@ -1390,18 +3325,22 @@ function applyServerInfo(payload){
       playerIdx = payload.player;
       playerConfirmed = true;
     }
+    // Se respeta lo que permite la sala: antes el control se permitia
+    // siempre "solo mando" y el relay lo devolvia al video en salas de solo
+    // video, por eso ESTADO parecia no responder.
     allowedViews = Array.isArray(payload.allowedViews)
       ? payload.allowedViews.filter(value => value === 'controller' || value === 'stream')
       : ['controller'];
-    if(!allowedViews.includes('controller')) allowedViews.unshift('controller');
+    if(!allowedViews.length) allowedViews = ['controller'];
     rtcIceServers = normalizeIceServers(payload.iceServers);
     connectionReady = true;
     reconnectAttempt = 0;
     clientSequence = 0;
     lastInputSignature = '';
+    pendingViewReplies = 0;
     const serverView = normalizeView(payload.viewMode);
     const initialView = allowedViews.includes(requestedView) ? requestedView : serverView;
-    applyViewMode(initialView, { notify:false, remember:false });
+    applyViewMode(initialView, { notify:initialView !== serverView, remember:false, force:initialView === 'stream' });
     startInputRefresh();
     sendOnlineInputState(true);
     send({ type:'request_snapshot' });
@@ -1433,7 +3372,15 @@ function handleIncomingPayload(payload){
     return;
   }
   if(payload.type === 'view_mode' && onlineMode){
-    applyViewMode(payload.viewMode, { notify:false, remember:true });
+    // Eco de un set_view: si hay una peticion mas nueva en vuelo, este eco
+    // es viejo y aplicarlo revertiria la eleccion del jugador.
+    if(pendingViewReplies > 0) pendingViewReplies -= 1;
+    if(pendingViewReplies > 0) return;
+    const serverView = normalizeView(payload.viewMode);
+    if(serverView !== viewMode){
+      applyViewMode(serverView, { notify:false, remember:true, force:true });
+      if(serverView === 'stream' && requestedView !== 'stream') warningStatusEl.textContent = 'Esta sala solo permite el modo con video.';
+    }
     return;
   }
   if(payload.type === 'webrtc_offer' && onlineMode){
@@ -1447,7 +3394,7 @@ function handleIncomingPayload(payload){
   if(payload.type === 'webrtc_stop' && onlineMode){
     if(!payload.negotiationId || payload.negotiationId === rtcNegotiationId){
       stopRtcPeer(false, 'host_stop');
-      applyViewMode('controller', { notify:false, force:true });
+      if(allowedViews.includes('controller')) applyViewMode('controller', { notify:false, force:true });
       warningStatusEl.textContent = payload.reason || 'El anfitrion detuvo el video. Los controles siguen activos.';
     }
     return;
@@ -1463,6 +3410,7 @@ function handleIncomingPayload(payload){
     clearStoredOnlineTicket();
     setStatus('Replaced', 'warn');
     warningStatusEl.textContent = 'Este acceso se abrio en otro dispositivo o pestana.';
+    statusToggleEl.classList.add('alert');
     try { ws.close(); } catch(error){}
     return;
   }
@@ -1472,6 +3420,8 @@ function handleIncomingPayload(payload){
     messageEl.textContent = 'Pilot ' + slotLabel(payload.player ?? playerIdx) + ' already linked';
     warningStatusEl.textContent = 'Ese QR ya esta ocupado por otro celular. Elige otro cockpit libre.';
     telemetryEl.textContent = 'Slot blocked to avoid dual-control interference.';
+    statusToggleEl.classList.add('alert');
+    updateMiniStatus();
     try { ws.close(); } catch(error){}
     return;
   }
@@ -1481,6 +3431,7 @@ function handleIncomingPayload(payload){
   }
   if(payload.type === 'toast' && payload.message){
     messageEl.textContent = payload.message;
+    updateMiniStatus();
   }
 }
 
@@ -1567,6 +3518,7 @@ function connect(){
         clearStoredOnlineTicket();
         setStatus(event.code === 4403 ? 'Forbidden' : 'Link expired', 'warn');
         messageEl.textContent = 'La sesion termino o el acceso seguro ya no es valido.';
+        updateMiniStatus();
         return;
       }
     }
@@ -1600,17 +3552,21 @@ slotButtons.forEach(button => {
   });
 });
 
-viewControllerEl.addEventListener('click', () => {
-  applyViewMode('controller', { notify:true, force:true });
+statusToggleEl.addEventListener('click', () => {
+  setDrawerOpen(!shellEl.classList.contains('drawer-open'));
 });
-viewStreamEl.addEventListener('click', () => {
-  if(viewStreamEl.disabled) return;
-  if(typeof window.RTCPeerConnection !== 'function'){
-    fallbackToController('Este navegador no admite video WebRTC. El control sigue disponible.');
-    return;
-  }
-  applyViewMode('stream', { notify:true });
+drawerCloseEl.addEventListener('click', () => setDrawerOpen(false));
+drawerScrimEl.addEventListener('click', () => setDrawerOpen(false));
+layoutToggleEl.addEventListener('click', () => {
+  const order = ['auto', 'portrait', 'landscape'];
+  setLayoutPref(order[(order.indexOf(layoutPref) + 1) % order.length]);
 });
+layoutOptionEls.forEach(button => {
+  button.addEventListener('click', () => setLayoutPref(button.dataset.layoutOption));
+});
+videoOnEl.addEventListener('click', () => requestVideo(true));
+videoOffEl.addEventListener('click', () => requestVideo(false));
+videoEnableEl.addEventListener('click', () => requestVideo(true));
 audioToggleEl.addEventListener('click', () => {
   setAudioEnabled(gameVideoEl.muted);
 });
@@ -1618,29 +3574,45 @@ audioToggleEl.addEventListener('click', () => {
 actionButtons.forEach(bindHold);
 bindJoystick();
 
+// Perder el foco (barra de notificaciones, un aviso del sistema) solo suelta
+// los controles. Pasar a segundo plano pausa el video para ahorrar datos y
+// al volver se retoma solo si el jugador lo tenia encendido.
+function releaseOnBlur(){
+  releaseAll(true);
+}
 function handleBackground(){
   releaseAll(true);
   stopInputRefresh();
-  if(viewMode === 'stream'){
-    fallbackToController('Video pausado al salir de la pantalla. Los controles siguen activos.');
+  // En salas de solo video no hay vista "solo mando" a la cual pausar.
+  if(viewMode === 'stream' && allowedViews.includes('controller')){
+    videoPausedByBackground = true;
+    applyViewMode('controller', { notify:true, remember:false });
+    setVideoStatus('Video en pausa', false);
+  }
+}
+function handleForeground(){
+  if(!connectionReady) return;
+  startInputRefresh();
+  send({ type:'request_snapshot' });
+  sendOnlineInputState(true);
+  if(videoPausedByBackground){
+    videoPausedByBackground = false;
+    // El anfitrion crea un video nuevo al recibir el cambio de vista.
+    if(viewMode === 'controller' && requestedView === 'stream' && streamAvailable()){
+      applyViewMode('stream', { notify:true });
+    }
   }
 }
 
-window.addEventListener('blur', handleBackground);
-window.addEventListener('focus', () => {
-  if(connectionReady){
-    startInputRefresh();
-    send({ type:'request_snapshot' });
-    sendOnlineInputState(true);
-  }
-});
+window.addEventListener('blur', releaseOnBlur);
+window.addEventListener('focus', handleForeground);
 document.addEventListener('visibilitychange', () => {
   if(document.hidden) handleBackground();
-  else if(connectionReady){
-    startInputRefresh();
-    send({ type:'request_snapshot' });
-  }
+  else handleForeground();
 });
+window.addEventListener('resize', applyLayout);
+window.addEventListener('orientationchange', () => setTimeout(applyLayout, 120));
+if(window.visualViewport) window.visualViewport.addEventListener('resize', applyLayout);
 window.addEventListener('beforeunload', () => {
   clearTimeout(reconnectTimer);
   stopInputRefresh();
@@ -1648,8 +3620,8 @@ window.addEventListener('beforeunload', () => {
   stopRtcPeer(true, 'page_closed');
 });
 
+applyLayout();
 updateSlotUi();
-applyPilotTheme(null);
 setAudioEnabled(false);
 applyViewMode('controller', { notify:false, remember:false, force:true });
 renderSnapshot();
