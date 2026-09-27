@@ -23,6 +23,13 @@ El proyecto conserva tres rutas compatibles:
 
 En ambos perfiles de telefono el juego del anfitrion sigue siendo la autoridad: el relay solo autentica sesiones, asigna slots, reenvia entradas y coordina WebRTC.
 
+### Mando del telefono
+
+- La pantalla principal del mando es el **juego**: el video (o un mini estado del piloto si no hay video) y, sin taparlo, la palanca y los botones STRIKE/SYSTEM.
+- **Formato**: `AUTO` sigue la orientacion del telefono; `VERTICAL` pone el video arriba y el mando abajo; `HORIZONTAL` muestra el juego completo al centro con la palanca en el borde izquierdo y los botones en el derecho. Si el navegador no permite bloquear la orientacion, el mando se gira solo para sostener el telefono de lado. La eleccion se recuerda en el telefono.
+- **ESTADO** despliega desde arriba un menu con pilotos, nivel, video encendido/apagado, formato, barras del mecha, jefe, avisos y ayuda. Se cierra con `Cerrar` o tocando fuera; un punto rojo avisa si tu mecha cayo.
+- Al salir del navegador el video se pausa para ahorrar datos y se reanuda al volver (salvo en salas de solo video).
+
 ## Archivos principales
 
 - `mechakatz_vs_kaiju_V9.html`: juego y fuente del panel de configuracion.
@@ -52,10 +59,11 @@ Eventos del VJ (nota MIDI en canal 1 / tecla), editables en el editor de configu
 | --- | --- | --- |
 | Enemigo pequeno / grande / lanzador | 36 / 38 / 40 | `F1` / `F2` / `F3` |
 | Oleada | 41 | `F4` |
+| Monstruo del mundo (segun el nivel) | 42 | `Insert` |
 | Soltar vida | 43 | `F5` |
 | Entrada del jefe | 57 | `F6` |
-| Laser / fuego / golpe del jefe | 48 / 50 / 52 | `F7` / `F8` / `F9` |
-| Segunda cabeza del jefe | 55 | `F10` |
+| Ataque 1 / 2 / 3 del jefe (en el Bake-Neko: laser / fuego / golpe) | 48 / 50 / 52 | `F7` / `F8` / `F9` |
+| Fase 2 del jefe (en el Bake-Neko: segunda cabeza) | 55 | `F10` |
 | Flash + temblor | 60 | `F11` |
 | Forzar avance | 64 | `\` |
 | Entrar a seleccion | 65 | `Enter` |
@@ -64,6 +72,64 @@ Eventos del VJ (nota MIDI en canal 1 / tecla), editables en el editor de configu
 ## Editor de configuracion
 
 Abre `mechakatz_config.html` en otra ventana del **mismo navegador** que el juego. Cada cambio se guarda en `localStorage` y el juego lo aplica en vivo. Desde el editor tambien se exporta/importa la configuracion como JSON.
+
+### Partidas al azar y jefes
+
+- El fondo del titulo es un mundo al azar del pool cada vez que se abre el juego (y al volver al titulo).
+- Cada partida juega 3 niveles y el jefe aparece siempre en el 3ro. En **STAGES > Modo de partida**, `3 MUNDOS AL AZAR DEL POOL` (por defecto) elige 3 mundos distintos entre los marcados **En partidas al azar**; `UN MUNDO COMPLETO` juega los 3 niveles de un solo mundo; `UN SET AL AZAR` usa los sets de abajo. **Forzar set** sirve para ensayar.
+- El jefe final se sortea en cada partida entre cuatro jefes de 2 fases (pestaña **BOSS**, con vista previa animada, sorteo y colores):
+  - **BAKE-NEKO**: laser, cortina de fuego y pisoton; en fase 2 despierta la segunda cabeza y flota.
+  - **ONI-GANI**: cangrejo kaiju con chorro a presion, burbujas acidas y embestidas; en fase 2 se rompe el caparazon y acelera.
+  - **TENGU-X**: cuervo mecanico con vendaval a ras de suelo (esquivalo moviendote al hueco o volando), abanico de plumas y lluvia de plumas; en fase 2 pelea en el aire.
+  - **DAIDARA-BOT**: coloso de piedra con ojo de magma, lluvia de rocas y terremoto con ondas; en fase 2 se agrieta y muestra su nucleo de magma.
+- Los cues MIDI de jefe son por slot: `Ataque 1/2/3` disparan el ataque equivalente del jefe activo y `Activar fase 2` adelanta la segunda fase.
+
+### Niveles del mundo: mañana, tarde y noche
+
+Cada mundo tiene **3 niveles** y cada nivel **3 oleadas**. El mundo juega el nivel que corresponde a su posicion en la partida:
+
+| Posicion | Nivel | Enemigos | Look |
+| --- | --- | --- | --- |
+| 1ro | MAÑANA | Los 3 clasicos | Cielo de dia, nubes, bruma en lo lejano |
+| 2do | TARDE | Aparece el monstruo propio del mundo | Atardecer, sol bajo, aves |
+| 3ro | NOCHE + jefe | Los dos monstruos del mundo, mas fuertes | Estrellas, luna, luces encendidas |
+
+- El escenario se pinta una sola vez en DECOR (la **escena base**, que es el momento natural de cada mundo: el desierto y el bosque son de tarde, la ciudad neon y la base lunar de noche). Los otros momentos se derivan solos: otro cielo, gradacion de color por paleta (ventanas, neon y antorchas quedan encendidas), capas ocultas o agregadas y bruma en lo lejano. En DECOR y en MODO DIBUJO el selector **Ver momento del dia** muestra cada nivel.
+- En **STAGES > Niveles del mundo** cada nivel tiene nombre, momento del dia, intensidad del tono, multiplicadores de vida/daño/velocidad de los enemigos, cielo personalizable y su editor de oleadas. `REGENERAR LOS 3 NIVELES` vuelve a los valores del mundo.
+- Nuevo modo de partida **UN MUNDO COMPLETO**: se sortea un mundo y se juegan sus 3 niveles seguidos (mañana, tarde y noche con el jefe).
+- El fondo del titulo tambien sortea el momento del dia.
+
+Bestiario (12 monstruos nuevos, editables y pintables en ENEMIES; se vuelven mas rapidos y fuertes de noche):
+
+| Mundo | TARDE | NOCHE |
+| --- | --- | --- |
+| Desierto | **ESCORPIX**: se entierra y brota bajo el jugador tras un anillo de aviso | **MOMIA-BOT**: lanza una venda y te jala hacia ella |
+| Suburbio | **GNOMO-BOMBA**: enciende la mecha y explota (daña a todos) | **PODA-BOT**: se alinea con tu carril y embiste de lado a lado |
+| Ciudad neon | **DRON-NEON**: vuela y dispara por su carril tras una mira laser | **NINJA-HOLO**: se teletransporta a tu espalda y corta |
+| Bosque | **HONGO-MECA**: nubes de esporas que envenenan y frenan | **LOBO-X**: merodea y salta sobre ti |
+| Jungla | **RANA-DARDO**: avanza a saltos y escupe charcos de veneno | **CAMALEON**: casi invisible; su lengua roba energia del especial |
+| Base espacial | **SLIME-X**: se divide al morir | **CENTINELA**: escudo frontal; flanquealo o rompe su guardia con golpe fuerte, especial, picada o lanzandole algo |
+
+El siguiente paso planeado (mundos bajo el agua: Atlantida, Artico, Playa y Rio) esta en [docs/PLAN_MUNDOS_ACUATICOS.md](docs/PLAN_MUNDOS_ACUATICOS.md).
+
+### Mundos y MODO DIBUJO
+
+En la pestana **DECOR** la seccion **Mundos** crea un nivel nuevo desde una plantilla (desierto, suburbio, ciudad neon, bosque, jungla, base espacial o vacio), lo duplica o lo abre directamente en **MODO DIBUJO**. Los niveles nuevos heredan el horizonte y los carriles del primer nivel del pool; para jugarlos, asignalos a un set en **STAGES**.
+
+**MODO DIBUJO** es un editor a pantalla completa del mapa:
+
+- Arriba, una tira con **todo el largo del nivel**, las oleadas (`O1`, `O2`...) y el final. Click o arrastre para ir a esa parte; `RECORRER` reproduce el recorrido como en la partida.
+- En el centro, la vista editable: `PINTAR` (pincel/gotero local) o `NAVEGAR` (arrastrar para recorrer). `CAPA ELEGIDA` limita la pintura a la capa seleccionada y `RESALTAR CAPA` atenua las demas.
+- A la derecha, las capas: visibilidad, orden, agregar elementos por categoria y sus parametros. Cada capa tiene opacidad, desplazamiento vertical, densidad, dispersion y una **zona** del nivel: con `ZONA DESDE AQUI` / `ZONA HASTA AQUI` un lago, una cabana o un templo aparece solo en ese tramo.
+- Atajos: `P`/`M` pintar-navegar, `B`/`I` pincel-gotero, `[` `]` grosor, flechas para recorrer (`Shift` = una pantalla), `R` reproducir, `T` objetivo, `H` resaltar, `L` carriles, `Ctrl+Z` deshacer, `Esc` cerrar.
+
+El catalogo de elementos incluye nubes, aves, niebla, luciernagas, estrellas fugaces, planetas, pinos, arboles, palmeras, helechos, arbustos, penascos, hierba, lianas, dosel, lagos, cascadas, templos, cabanas, lanzaderas, modulos de estacion, cupulas, radares, tuberias y suelos de pradera, selva y metal, ademas de los elementos clasicos de desierto y ciudad.
+
+Se incluyen tres mundos nuevos (agregados una sola vez al pool, junto con un set propio):
+
+- **BOSQUE BRUMOSO**: atardecer frio entre pinos azulados y niebla; lago en el primer tercio, cabana del guardabosques cerca del final y luciernagas en la segunda mitad.
+- **TEMPLO ESMERALDA**: jungla humeda con dosel, lianas, loros, cascadas y un templo escalonado con antorchas que emerge en la segunda mitad.
+- **BASE LUNAR NYX-7**: base de noche eterna frente a un gigante gaseoso anillado, con lanzaderas, modulos, radares, cupulas y tuberias; es la arena final del Bake-Neko.
 
 Si modificas el codigo del panel dentro del juego, regenera el editor:
 
