@@ -424,19 +424,24 @@ def room_page(session: GameSession, settings: Settings, base_url: str) -> str:
     cards: list[str] = []
     for player in range(session.max_players):
         control_url = payload["joinUrls"][player]
-        stream_url = payload["streamUrls"][player]
         cards.append(
             f"""
             <article class="card" data-player="{player}">
               <h2>P{player + 1}</h2>
-              <img src="/room/{quote(session.session_id)}/qr/{player}?view=controller" alt="QR de control P{player + 1}">
-              <a href="{html.escape(control_url)}">Control + estado</a>
-              <a class="stream" href="{html.escape(stream_url)}">Juego transmitido + control</a>
+              <img src="/room/{quote(session.session_id)}/qr/{player}?view=controller" alt="QR del mando P{player + 1}">
+              <a href="{html.escape(control_url)}">Abrir mando P{player + 1}</a>
               <span class="presence">Libre</span>
             </article>
             """
         )
     safe_title = html.escape(session.title)
+    # El mando siempre arranca mostrando la cabina del operador; el video del
+    # juego lo enciende cada jugador con el boton VIDEO, junto a Estado.
+    video_hint = (
+        "Esta sala no transmite video."
+        if session.mode == "controller"
+        else "El video del juego empieza apagado: cada jugador lo enciende con el boton VIDEO, junto a Estado."
+    )
     return f"""<!doctype html>
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{safe_title} - Sala {session.room_code}</title>
@@ -447,13 +452,13 @@ main{{width:min(1120px,94vw);margin:auto;padding:32px 0}} h1{{color:var(--yellow
 .meta{{padding:14px;border:1px solid #2b4260;background:#080d18;margin:20px 0}} .grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}}
 .card{{padding:16px;background:linear-gradient(180deg,var(--panel),#080b13);border:1px solid #244c61;text-align:center}} .card.busy{{border-color:var(--green)}}
 .card img{{display:block;width:min(100%,260px);margin:0 auto 12px;background:#fff;padding:8px}} .card a{{display:block;margin:8px 0;padding:10px;color:#001018;background:var(--cyan);text-decoration:none;font-weight:bold}}
-.card a.stream{{background:var(--pink);color:#fff}} .presence{{display:block;margin-top:10px;color:var(--green)}} code{{color:var(--cyan)}}
+.presence{{display:block;margin-top:10px;color:var(--green)}} code{{color:var(--cyan)}}
 </style></head><body><main>
-<h1>{safe_title}</h1><p class="lead">Sala <strong>{session.room_code}</strong>. Cada telefono puede usar solo estado o recibir el juego transmitido.</p>
+<h1>{safe_title}</h1><p class="lead">Sala <strong>{session.room_code}</strong>. Escanea el QR de tu piloto: el mando muestra la cabina de tu operador. {video_hint}</p>
 <div class="meta">El anfitrion se conecta de salida al relay. Expira: <code>{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(session.expires_at))}</code>.</div>
 <section class="grid">{''.join(cards)}</section>
 </main><script>
-async function refresh(){{try{{const r=await fetch('/api/sessions/{session.session_id}/public',{{cache:'no-store'}});if(!r.ok)return;const d=await r.json();document.querySelectorAll('.card').forEach((card,i)=>{{const c=d.controllers[i];card.classList.toggle('busy',!!(c&&c.connected));card.querySelector('.presence').textContent=c&&c.connected?('Conectado / '+c.viewMode):'Libre';}});}}catch(_e){{}}}}
+async function refresh(){{try{{const r=await fetch('/api/sessions/{session.session_id}/public',{{cache:'no-store'}});if(!r.ok)return;const d=await r.json();document.querySelectorAll('.card').forEach((card,i)=>{{const c=d.controllers[i];card.classList.toggle('busy',!!(c&&c.connected));card.querySelector('.presence').textContent=c&&c.connected?('Conectado'+(d.mode==='mixed'?(c.viewMode==='stream'?' / video':' / cabina'):'')):'Libre';}});}}catch(_e){{}}}}
 setInterval(refresh,1500);refresh();
 </script></body></html>"""
 
