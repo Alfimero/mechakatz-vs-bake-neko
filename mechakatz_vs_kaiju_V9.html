@@ -975,13 +975,15 @@
   <h3>Vuelo</h3>
   Mantener la tecla de vuelo eleva al mecha. Cuesta HP por segundo. Recuperas HP golpeando kaijus.
   <br>En vuelo: <kbd>Light</kbd> dispara hacia abajo. <kbd>Down + Light</kbd> hace dive kick.
+  <h3>Mecha caido</h3>
+  Un aliado lo repara con <kbd>Light</kbd> a su lado antes de que termine la cuenta. El caido puede pedir ayuda con <kbd>Light</kbd> o <kbd>Especial</kbd> (boton AYUDA del celular): lanza una bengala SOS sobre su mecha.
   <h3>MIDI</h3>
   Puedes activar hasta 2 dispositivos MIDI al mismo tiempo y remapear cada evento desde CONFIG.
   <br>Usa <kbd>E4</kbd> para forzar stage y <kbd>A3</kbd> como entrada directa del Bake-Neko por default.
   <br>El regreso al titulo al final ya no depende de botones de jugador: ahora puede cerrarse solo por un mensaje MIDI mapeable.
   <br>Tambien puedes recibir MIDI por relay WebSocket en red local, usando la misma sala que tu emisor MIDIVJ.
   <h3>Celulares / WebSocket</h3>
-  Inicia el hub remoto y deja esta pantalla conectada. Los celulares se enlazan por QR a una cabina tactil estilo interior de mecha.
+  Inicia el hub remoto y deja esta pantalla conectada. Los celulares se enlazan por QR a una cabina tactil estilo interior de mecha, donde el gato operador de cada mecha reacciona a su vida, a los golpes y a la espera.
   <br>El juego puede arrancar con 1 a 4 pilotos remotos, segun cuantas cabinas se conecten antes de empezar.
   <h3>Configuracion</h3>
   La configuracion se edita desde <kbd>mechakatz_config.html</kbd> (abrelo en otra ventana del mismo navegador). Los cambios se aplican al juego en vivo, sin reiniciar.
@@ -1328,13 +1330,23 @@ const DECOR_TYPES = {
     colors:{ main:'Follaje', light:'Luz', dark:'Sombra' },
     defaults:{ px:0.85, gap:40, scale:1, seed:3700, depth:26, colors:{ main:'#1f6a2c', light:'#3f9a3a', dark:'#123f1c' } }
   },
+  // Lago con orillas y juncos; river > 0 le suma el rio que baja del fondo
+  // y desemboca en su orilla lejana (se ve donde empieza y donde termina).
+  // Su entorno va en la MISMA celda, asi se mueve junto al agua: la montaña
+  // donde nace el rio (mount), el muelle (dock) y las cabañas de la orilla.
+  // Maximo 11 colores por capa: el picking del editor usa un id por clave.
   water: {
     cat:'naturaleza', label:'LAGO / RIO', scroll:true,
     params:[
-      { key:'h', label:'Alto del agua', min:2, max:80, step:1 }
+      { key:'w', label:'Largo del lago', min:30, max:600, step:2 },
+      { key:'h', label:'Alto del agua', min:3, max:80, step:1 },
+      { key:'river', label:'Rio que llega (largo, 0 = sin rio)', min:0, max:160, step:1 },
+      { key:'mount', label:'Montaña del rio (alto, 0 = sin montaña)', min:0, max:200, step:1 },
+      { key:'dock', label:'Muelle (largo, 0 = sin muelle)', min:0, max:120, step:1 },
+      { key:'cabins', label:'Cabañas en la orilla', min:0, max:3, step:1 }
     ],
-    colors:{ deep:'Fondo', shallow:'Superficie', shine:'Reflejos', edge:'Orilla' },
-    defaults:{ px:0.35, gap:120, scale:1, seed:2800, h:12, colors:{ deep:'#1d4f7a', shallow:'#3f86b5', shine:'#cfefff', edge:'#2a5a3a' } }
+    colors:{ deep:'Fondo', shallow:'Superficie', shine:'Reflejos', edge:'Orilla', sand:'Playa', reeds:'Juncos', rock:'Montaña', snow:'Nieve', pine:'Pinos de la ladera', wood:'Madera', window:'Ventanas y farol' },
+    defaults:{ px:0.35, gap:360, scale:1, seed:2800, w:160, h:12, river:30, mount:72, dock:30, cabins:2, colors:{ deep:'#1d4f7a', shallow:'#3f86b5', shine:'#cfefff', edge:'#2a5a3a', sand:'#b8a57a', reeds:'#7a6a3a', rock:'#5a6a82', snow:'#edf2f8', pine:'#244a40', wood:'#8a5a34', window:'#ffd36a' } }
   },
   // ---- Lugares ----
   waterfall: {
@@ -1491,9 +1503,10 @@ function defaultSceneryFor(bg){
     };
   }
   if(bg === 'forest'){
-    // Bosque brumoso al atardecer: capas de pinos azulados, lago en el
-    // primer tercio, cabaña del guardabosques cerca del final y luciernagas
-    // que aparecen cuando cae la tarde (segunda mitad del recorrido).
+    // Bosque brumoso al atardecer: capas de pinos azulados; en el primer
+    // tercio, un lago al pie de su montaña nevada (el rio nace en el glaciar),
+    // con muelle y cabañas en la orilla; cabaña del guardabosques cerca del
+    // final y luciernagas que aparecen cuando cae la tarde (segunda mitad).
     return {
       sky:[ { p:0, c:'#2a3f6a' }, { p:0.45, c:'#5f7fa8' }, { p:0.8, c:'#e8b77a' }, { p:1, c:'#f3d29a' } ],
       layers:[
@@ -1504,7 +1517,7 @@ function defaultSceneryFor(bg){
         decorLayer('mountains', { px:0.18, gap:150, seed:77, w:120, h:46, variation:0.5, colors:{ main:'#3b566c' } }),
         decorLayer('pines', { px:0.26, gap:16, h:36, w:14, jitter:0.5, density:0.92, variation:0.5, colors:{ leaves:'#2c4f55', dark:'#22403f', trunk:'#2a3434', tip:'#3d6b6a' } }),
         decorLayer('fog', { px:0.3, lift:2, h:20, alpha:0.45, colors:{ main:'#d9e4ea', light:'#ffffff' } }),
-        decorLayer('water', { px:0.34, gap:120, h:15, zoneStart:0.28, zoneEnd:0.56, colors:{ deep:'#3a6a8a', shallow:'#6fa0c0', shine:'#e6f6ff', edge:'#2f5a3e' } }),
+        decorLayer('water', { px:0.34, gap:330, w:170, h:14, river:36, zoneStart:0.28, zoneEnd:0.56, colors:{ deep:'#3a6a8a', shallow:'#6fa0c0', shine:'#e6f6ff', edge:'#2f5a3e', sand:'#9a8f6a', reeds:'#6a5a34' } }),
         decorLayer('trees', { px:0.5, gap:60, h:50, w:36, jitter:0.6, density:0.85, variation:0.5, colors:{ leaves:'#2f6b3a', light:'#4f9a4a', dark:'#1f4a2a', trunk:'#4a2f1e', fruit:'#ff7a5a' } }),
         decorLayer('cabins', { px:0.5, gap:700, scale:1.3, zoneStart:0.6, zoneEnd:0.95 }),
         decorLayer('pines', { px:0.7, gap:95, seed:1400, h:74, w:28, jitter:0.7, density:0.7, variation:0.45, colors:{ leaves:'#1d4a30', dark:'#123522', trunk:'#3a2416', tip:'#6a9a7a' } }),
@@ -1881,7 +1894,7 @@ const DECOR_EMISSIVE = {
   towers:['win1', 'win2', 'win3'], houses:['knob', 'win1', 'win2', 'win3'], streetlights:['bulb'],
   skyscrapers:['beacon', 'win1', 'win2', 'win3'], billboards:['c1', 'c2', 'c3', 'c4', 'c5'],
   neon:['stripeNeon', 'stripeMid', 'doorGlow', 'win1', 'win2', 'win3'], ground_neon:['line', 'dashA'],
-  fireflies:['a', 'b'], ruins:['glow'], cabins:['window'], rockets:['window', 'flame'],
+  fireflies:['a', 'b'], ruins:['glow'], cabins:['window'], water:['window'], rockets:['window', 'flame'],
   station:['window', 'light'], domes:['glow'], antennas:['beacon'], pipes:['glow'], ground_metal:['light']
 };
 function hexToRgb(hex){
@@ -2122,7 +2135,7 @@ function defaultBossRoster(){
 const DEFAULT_CONFIG = {
   // Revision de los ajustes de fabrica: una config guardada con una revision
   // menor se actualiza una sola vez en migrateSavedConfig().
-  tuningRev: 1,
+  tuningRev: 2,
   general: {
     lockTabInGame: false,
     scanlines: true,
@@ -2190,6 +2203,9 @@ const DEFAULT_CONFIG = {
     hitstopFrames: 5,
     attackRange: 22,
     grabRange: 18,
+    // Cuadros que un enemigo cargado forcejea antes de reaccionar (picar,
+    // envenenar, escaparse...); de noche reacciona 12 cuadros antes.
+    carryReactDelay: 45,
     shieldHp: 4,
     shieldRegenFrames: 240,
     enemyKnockTimeMul: 1,
@@ -2256,8 +2272,10 @@ const DEFAULT_CONFIG = {
   // 'tuxedo' | 'calico' | 'tortie') pintado con coatColor/coatColor2; belly =
   // pecho y hocico; ears = 'normal' | 'big' | 'fold' | 'tuft'; fx = efecto de
   // su especial y de su animacion de seleccion ('wave' | 'pound' | 'bolts' |
-  // 'slash'). Las configs guardadas con menos personajes reciben los nuevos
-  // una sola vez en migrateSavedConfig().
+  // 'slash'). operator / pilotGender = personalidad y genero del gato que lo
+  // pilota en la cabina del celular ('auto' = segun el nombre, ver
+  // OPERATOR_BY_NAME). Las configs guardadas con menos personajes reciben
+  // los nuevos una sola vez en migrateSavedConfig().
   players: [
     {
       name:'CALYPSO',
@@ -2279,7 +2297,9 @@ const DEFAULT_CONFIG = {
       coatColor2:'#003a7a',
       belly:'#b8fbff',
       ears:'big',
-      fx:'wave'
+      fx:'wave',
+      operator:'auto',
+      pilotGender:'auto'
     },
     {
       name:'BRUTUS',
@@ -2301,7 +2321,9 @@ const DEFAULT_CONFIG = {
       coatColor2:'#3a0000',
       belly:'#ffb0a0',
       ears:'normal',
-      fx:'pound'
+      fx:'pound',
+      operator:'auto',
+      pilotGender:'auto'
     },
     {
       name:'VOLT',
@@ -2323,7 +2345,9 @@ const DEFAULT_CONFIG = {
       coatColor2:'#3a2800',
       belly:'#fff6b0',
       ears:'tuft',
-      fx:'bolts'
+      fx:'bolts',
+      operator:'auto',
+      pilotGender:'auto'
     },
     {
       name:'SHADE',
@@ -2345,7 +2369,9 @@ const DEFAULT_CONFIG = {
       coatColor2:'#1e0030',
       belly:'#d8a8ff',
       ears:'normal',
-      fx:'slash'
+      fx:'slash',
+      operator:'auto',
+      pilotGender:'auto'
     },
     {
       name:'TIGRE',
@@ -2367,7 +2393,9 @@ const DEFAULT_CONFIG = {
       coatColor2:'#5a2408',
       belly:'#ffe2b8',
       ears:'normal',
-      fx:'pound'
+      fx:'pound',
+      operator:'auto',
+      pilotGender:'auto'
     },
     {
       name:'NIEVE',
@@ -2389,7 +2417,9 @@ const DEFAULT_CONFIG = {
       coatColor2:'#aab6d6',
       belly:'#ffffff',
       ears:'normal',
-      fx:'wave'
+      fx:'wave',
+      operator:'auto',
+      pilotGender:'auto'
     },
     {
       name:'SIAM',
@@ -2411,7 +2441,9 @@ const DEFAULT_CONFIG = {
       coatColor2:'#2e1c14',
       belly:'#fff4e2',
       ears:'big',
-      fx:'bolts'
+      fx:'bolts',
+      operator:'auto',
+      pilotGender:'auto'
     },
     {
       name:'SMOKING',
@@ -2433,7 +2465,9 @@ const DEFAULT_CONFIG = {
       coatColor2:'#0e0e14',
       belly:'#f4f4f4',
       ears:'normal',
-      fx:'slash'
+      fx:'slash',
+      operator:'auto',
+      pilotGender:'auto'
     },
     {
       name:'CALICO',
@@ -2455,7 +2489,9 @@ const DEFAULT_CONFIG = {
       coatColor2:'#2a2420',
       belly:'#ffffff',
       ears:'normal',
-      fx:'wave'
+      fx:'wave',
+      operator:'auto',
+      pilotGender:'auto'
     },
     {
       name:'COON',
@@ -2477,7 +2513,9 @@ const DEFAULT_CONFIG = {
       coatColor2:'#2a180a',
       belly:'#e8cfa8',
       ears:'tuft',
-      fx:'pound'
+      fx:'pound',
+      operator:'auto',
+      pilotGender:'auto'
     },
     {
       name:'BENGAL',
@@ -2499,7 +2537,9 @@ const DEFAULT_CONFIG = {
       coatColor2:'#2e1806',
       belly:'#fff0cc',
       ears:'normal',
-      fx:'slash'
+      fx:'slash',
+      operator:'auto',
+      pilotGender:'auto'
     },
     {
       name:'FOLD',
@@ -2521,7 +2561,9 @@ const DEFAULT_CONFIG = {
       coatColor2:'#c8a070',
       belly:'#c8d4e4',
       ears:'fold',
-      fx:'bolts'
+      fx:'bolts',
+      operator:'auto',
+      pilotGender:'auto'
     }
   ],
   enemies: {
@@ -2918,6 +2960,23 @@ function migrateSavedConfig(config, saved){
       }
     }
   }
+  if(rev < 2){
+    // Rev 2: la capa de agua era una franja infinita sobre el horizonte;
+    // ahora es un lago con orillas y un rio que llega. Las capas guardadas
+    // en el formato viejo (sin largo 'w') toman la forma del bosque de fabrica.
+    const savedStages = saved && Array.isArray(saved.stages) ? saved.stages : [];
+    (config.stages || []).forEach((stage, i) => {
+      const savedLayers = savedStages[i] && savedStages[i].scenery && Array.isArray(savedStages[i].scenery.layers) ? savedStages[i].scenery.layers : [];
+      const layers = stage && stage.scenery && Array.isArray(stage.scenery.layers) ? stage.scenery.layers : [];
+      layers.forEach((layer, j) => {
+        const raw = savedLayers[j];
+        if(!layer || layer.type !== 'water' || !raw || raw.w !== undefined) return;
+        layer.gap = Math.max(Number(layer.gap) || 0, 330);
+        layer.w = 170;
+        layer.river = 36;
+      });
+    });
+  }
   config.tuningRev = DEFAULT_CONFIG.tuningRev;
   return config;
 }
@@ -3117,7 +3176,6 @@ const REMOTE_STATE = {
   sessionId:'',
   roomUrl:'',
   joinUrls:Array.from({ length: MAX_PLAYERS }, () => ''),
-  streamUrls:Array.from({ length: MAX_PLAYERS }, () => ''),
   wsUrl:'',
   hostTicket:'',
   iceServers:[],
@@ -3587,6 +3645,7 @@ function sfx(name){
     case 'boss_attack': beep(140,.18,'sawtooth',.07); noise(.12,.05); break;
     case 'boss_hit': beep(280,.06,'square',.06); break;
     case 'win': [523,659,784,1047].forEach((f,i) => setTimeout(() => beep(f,.18,'triangle',.06), i * 120)); break;
+    case 'sos': [988,1319,988].forEach((f,i) => setTimeout(() => beep(f,.07,'square',.05), i * 90)); break;
     case 'lose': [523,392,330,261].forEach((f,i) => setTimeout(() => beep(f,.22,'sawtooth',.06), i * 180)); break;
   }
 }
@@ -3883,7 +3942,7 @@ function updateRemoteStatus(){
   } else {
     remoteStatus.textContent = `REMOTE ${modeLabel} BUSCANDO`;
   }
-  remoteStatus.title = [REMOTE_STATE.roomUrl, ...REMOTE_STATE.joinUrls.filter(Boolean), ...REMOTE_STATE.streamUrls.filter(Boolean)].join('\n');
+  remoteStatus.title = [REMOTE_STATE.roomUrl, ...REMOTE_STATE.joinUrls.filter(Boolean)].join('\n');
 }
 function stopRemoteCapture(){
   if(REMOTE_STATE.captureStream){
@@ -3922,7 +3981,6 @@ function clearRemoteSessionData(){
   REMOTE_STATE.sessionId = '';
   REMOTE_STATE.roomUrl = '';
   REMOTE_STATE.joinUrls = Array.from({ length: MAX_PLAYERS }, () => '');
-  REMOTE_STATE.streamUrls = Array.from({ length: MAX_PLAYERS }, () => '');
   REMOTE_STATE.wsUrl = '';
   REMOTE_STATE.hostTicket = '';
   REMOTE_STATE.iceServers = [];
@@ -4007,7 +4065,6 @@ async function createOnlineRemoteSession(generation){
     REMOTE_STATE.sessionId = typeof payload.sessionId === 'string' ? payload.sessionId : '';
     REMOTE_STATE.roomUrl = typeof payload.roomUrl === 'string' ? payload.roomUrl : '';
     REMOTE_STATE.joinUrls = normalizeRemoteUrls(payload.joinUrls);
-    REMOTE_STATE.streamUrls = normalizeRemoteUrls(payload.streamUrls);
     REMOTE_STATE.wsUrl = payload.wsUrl;
     REMOTE_STATE.hostTicket = payload.hostTicket;
     REMOTE_STATE.iceServers = Array.isArray(payload.iceServers) ? payload.iceServers : [];
@@ -4233,7 +4290,10 @@ function createRemoteSnapshot(){
           coatColor2: preview.coatColor2,
           belly: preview.belly,
           ears: preview.ears,
-          fx: preview.fx
+          fx: preview.fx,
+          // Gato operador de la cabina del celular (personalidad y genero).
+          operator: resolveOperatorPersona(preview, charIdx),
+          pilotGender: resolveOperatorGender(preview, charIdx)
         };
       }),
       charStats: game.state === 'select' ? playerStatRanges() : null,
@@ -4255,7 +4315,16 @@ function createRemoteSnapshot(){
         repairProgress: player.repairState === 'downed' ? clamp(player.repairProgress / Math.max(1, CONFIG.revive.repairFrames), 0, 1) : 0,
         downCount: player.downCount,
         flightRatio: clamp(1 - (player.flightTime / maxFlightFrames), 0, 1),
-        active: player.repairState === 'active'
+        active: player.repairState === 'active',
+        // Contadores de eventos: la cabina reacciona cuando suben (daño =
+        // temblor naranja, curacion = verde, escudo, bengala SOS).
+        charIdx: player.charIdx,
+        hurt: player.hurtCount || 0,
+        hurtDmg: player.lastHurt || 0,
+        block: player.blockCount || 0,
+        heal: player.healCount || 0,
+        sos: (player.sosTimer || 0) > 0,
+        sosCount: player.sosCount || 0
       })),
       boss: game.boss && !game.boss.dead ? {
         name: bossDisplayName(game.boss),
@@ -4302,7 +4371,6 @@ function handleRemoteMessage(raw){
   if(payload.type === 'hello' || payload.type === 'server_info'){
     REMOTE_STATE.roomUrl = payload.roomUrl || REMOTE_STATE.roomUrl;
     if(Array.isArray(payload.joinUrls)) REMOTE_STATE.joinUrls = normalizeRemoteUrls(payload.joinUrls);
-    if(Array.isArray(payload.streamUrls)) REMOTE_STATE.streamUrls = normalizeRemoteUrls(payload.streamUrls);
     if(Array.isArray(payload.controllers)){
       REMOTE_STATE.controllers = payload.controllers.slice(0, MAX_PLAYERS).map(Boolean);
       while(REMOTE_STATE.controllers.length < MAX_PLAYERS) REMOTE_STATE.controllers.push(false);
@@ -4686,7 +4754,15 @@ function makePlayer(idx, charIdx, spawnOrder = idx){
     diveKickHit:false,
     entryFall:0,
     entrySpinDir:1,
-    exitTimer:0
+    exitTimer:0,
+    // Contadores para la cabina del celular (temblor naranja al recibir daño,
+    // brillo verde al curarse, escudo) y pedido de ayuda con el mecha caido.
+    hurtCount:0,
+    lastHurt:0,
+    blockCount:0,
+    healCount:0,
+    sosTimer:0,
+    sosCount:0
   };
   applyPlayerSize(player);
   return player;
@@ -5237,7 +5313,14 @@ function livingPlayers(){
 }
 function healPlayer(player, amount){
   if(!player || player.hp <= 0) return;
+  const before = player.hp;
   player.hp = clamp(player.hp + amount, 0, player.maxHp);
+  if(player.hp > before) player.healCount = (player.healCount || 0) + 1;
+}
+// Registra el golpe para la cabina del celular (tiembla y se tiñe de naranja).
+function notePlayerHurt(player, damage){
+  player.hurtCount = (player.hurtCount || 0) + 1;
+  player.lastHurt = Math.max(0, Math.round(damage));
 }
 function addSpecial(player, amount){
   if(!player || player.hp <= 0) return;
@@ -5257,6 +5340,8 @@ function getRepairTarget(player){
   }
   return nearest;
 }
+// Duracion de la bengala SOS de un mecha caido (boton de AYUDA).
+const SOS_FLARE_FRAMES = 120;
 function startDownedState(player){
   const windowFrames = reviveWindowFramesFor(player);
   if(windowFrames <= 0){
@@ -5296,6 +5381,8 @@ function completeRepair(target, helper){
   target.y = 0;
   target.state = 'idle';
   target.flash = 18;
+  target.sosTimer = 0;
+  target.healCount = (target.healCount || 0) + 1;
   if(helper){
     helper.state = 'idle';
     helper.repairingTarget = 0;
@@ -5684,6 +5771,7 @@ function damagePlayer(player, damage, source, options = {}){
     player.shield -= 1;
     player.flash = 4;
     player.invuln = 6;
+    player.blockCount = (player.blockCount || 0) + 1;
     sfx('shield');
     if(player.shield <= 0){
       player.shield = 0;
@@ -5695,6 +5783,7 @@ function damagePlayer(player, damage, source, options = {}){
     return true;
   }
   player.hp = clamp(player.hp - damage, 0, player.maxHp);
+  notePlayerHurt(player, damage);
   // Reset del combo de strike: si te pegaron pierdes la racha y el 4to no se vuelve crash
   player.combo = 0;
   player.comboTimer = 0;
@@ -5731,6 +5820,8 @@ function damageEnemy(enemy, damage, attacker, options = {}){
   }
   enemy.hp = clamp(enemy.hp - damage, 0, enemy.maxHp);
   enemy.flash = 6;
+  // Un golpe corta la huida o el contraataque tras zafarse de un mecha.
+  enemy.carryCounter = null;
   enemy.vx = (options.dir || 1) * (options.kb || CONFIG.physics.knockbackLight);
   enemy.vz = options.kbz || 0;
   enemy.knockedDown = Math.max(enemy.knockedDown, options.down ? 24 : 10);
@@ -6034,6 +6125,7 @@ function tryGrab(player){
     target.abil = '';
     target.abilLen = 0;
   }
+  if(target.type === 'enemy') startEnemyCarry(target);
   player.grabbed = target;
   target.grabbedBy = player.id;
   target.thrown = false;
@@ -6087,6 +6179,251 @@ function throwGrabbed(player, input){
   player.cooldown = 8;
   sfx('hit_heavy');
 }
+// ---- Reacciones de los enemigos al ser cargados ----
+// Mientras un mecha lo carga, cada sprite forcejea a su manera y, pasado
+// CONFIG.physics.carryReactDelay (antes de noche), actua: pica, envenena,
+// enciende la mecha, se escapa o se suelta y contraataca. Toda accion avisa
+// antes (pose + "!" de ENEMY_CARRY_REACTIONS.warn): lanzarlo a tiempo la
+// evita. Tiempos y poses en el bloque de arte (ENEMY_CARRY_REACTIONS /
+// ENEMY_CARRY_POSES).
+function carryReactDelay(enemy){
+  return Math.max(16, Math.round((CONFIG.physics.carryReactDelay ?? 45) - ((enemy.tier || 1) - 1) * 6));
+}
+function startEnemyCarry(enemy){
+  enemy.carryT = 0;
+  enemy.carryNext = carryReactDelay(enemy);
+  enemy.carryLast = -99;
+  enemy.carryActs = 0;
+  enemy.carryCounter = null;
+  enemy.knockedDown = 0;
+}
+function updateEnemyCarried(enemy, holder){
+  if(enemy.carryNext === undefined) startEnemyCarry(enemy);
+  enemy.anim += 1;
+  enemy.facing = -(holder.facing || 1);
+  enemy.carryT++;
+  const def = ENEMY_CARRY_REACTIONS[enemy.sprite];
+  const action = CARRY_ACTIONS[enemy.sprite];
+  if(!def || !def.act || !action) return;
+  if(def.warn > 0 && enemy.carryNext - enemy.carryT === def.warn) sfx('select');
+  if(enemy.carryT < enemy.carryNext) return;
+  enemy.carryLast = enemy.carryT;
+  enemy.carryNext = def.every > 0 ? enemy.carryT + def.every : Infinity;
+  action(enemy, holder, enemy.carryActs++ === 0);
+}
+// Daño de forcejeo: resta vida sin derribar ni soltar (como el veneno).
+function carryChipDamage(holder, damage, color){
+  hazardDamagePlayer(holder, damage, color);
+  holder.flash = Math.max(holder.flash, 5);
+  game.shake = Math.max(game.shake, 2 * CONFIG.general.screenshakeIntensity);
+  spawnHitBurst(holder.x, holder.z, holder.y + 22, color, 4);
+  sfx('hit_light');
+}
+// Se zafa sin quedar derribado (escapes y contraataques).
+function carryBreakFree(enemy, holder){
+  if(holder && holder.grabbed === enemy){
+    holder.grabbed = null;
+    if(holder.state === 'carry') holder.state = 'idle';
+    holder.cooldown = Math.max(holder.cooldown || 0, 12);
+  }
+  enemy.grabbedBy = 0;
+  enemy.thrown = false;
+  enemy.thrownOwner = null;
+  enemy.vx = 0;
+  enemy.vz = 0;
+  enemy.vy = 0;
+  enemy.state = 'walk';
+  enemy.stateTimer = 0;
+}
+// Movimiento tras zafarse: 'drop' cae de pie, 'slam' cae golpeando al
+// mecha, 'hop' salta lejos y 'fly' se aleja volando.
+function startCarryCounter(enemy, kind, vx, vy, holder){
+  enemy.carryCounter = { kind, t:0, holderId:holder ? holder.id : 0 };
+  enemy.vx = vx;
+  enemy.vy = vy;
+}
+function updateCarryCounter(enemy){
+  const counter = enemy.carryCounter;
+  counter.t++;
+  enemy.anim += 1;
+  enemy.x = clamp(enemy.x + enemy.vx, game.cameraX + 10, game.cameraX + W - 10);
+  if(counter.kind === 'fly'){
+    enemy.y = Math.min(enemy.y + 1.2, 34);
+    if(counter.t >= 26){
+      enemy.carryCounter = null;
+      enemy.vx = 0;
+      enemy.aiTimer = 30;
+    }
+    return;
+  }
+  enemy.y += enemy.vy;
+  enemy.vy -= CONFIG.physics.gravity;
+  if(enemy.y > 0) return;
+  enemy.y = 0;
+  enemy.vx = 0;
+  enemy.vy = 0;
+  enemy.carryCounter = null;
+  enemy.state = 'walk';
+  enemy.aiTimer = 30 + Math.random() * 20;
+  spawnEmergeDust(enemy.x, enemy.z, 4);
+  if(counter.kind === 'hop'){
+    enemy.abil = '';
+    enemy.abilityCd = Math.max(enemy.abilityCd || 0, 40);
+  }
+  if(counter.kind === 'slam'){
+    // El grandote cae con los dos puños sobre quien lo cargaba.
+    const holder = game.players.find(player => player.id === counter.holderId);
+    game.shake = Math.max(game.shake, 5 * CONFIG.general.screenshakeIntensity);
+    spawnEmergeDust(enemy.x, enemy.z, 10);
+    sfx('hit_heavy');
+    if(holder && Math.abs(holder.x - enemy.x) < 30 * enemySizeMul() && Math.abs(holder.z - enemy.z) < 12 && holder.y < 24){
+      damagePlayer(holder, Math.round(enemy.atk * 1.3), enemy, { dir:sign(holder.x - enemy.x) || enemy.facing, kb:CONFIG.physics.knockbackHeavy, down:true });
+    }
+    // Queda con el puño estirado (stateTimer 7 salta el golpe del cuadro 8).
+    enemy.state = 'attack';
+    enemy.stateTimer = 7;
+  }
+}
+// Accion de cada sprite (enemy mira a holder; first = primera vez en esta
+// cargada, para no repetir mensajes).
+const CARRY_ACTIONS = {
+  // Grandote: se suelta de un tiron y cae golpeando.
+  big:(enemy, holder) => {
+    carryBreakFree(enemy, holder);
+    startCarryCounter(enemy, 'slam', (sign(holder.x - enemy.x) || enemy.facing) * 0.5, -1.2, holder);
+    spawnHitBurst(enemy.x, enemy.z, enemy.y + 14, '#ffffff', 8);
+    game.shake = Math.max(game.shake, 3 * CONFIG.general.screenshakeIntensity);
+    sfx('shield_break');
+  },
+  // Lanzador: le dispara a quemarropa y sale despedido por el retroceso.
+  thrower:(enemy, holder) => {
+    carryBreakFree(enemy, holder);
+    spawnHitBurst(enemy.x + enemy.facing * 8, enemy.z, enemy.y + 12, enemyColorsFor(enemy).orb1 || '#ff7aff', 10);
+    sfx('air_shot');
+    damagePlayer(holder, enemy.atk, enemy, { dir:enemy.facing, kb:CONFIG.physics.knockbackHeavy });
+    startCarryCounter(enemy, 'drop', -enemy.facing * 1.4, 1.4, holder);
+  },
+  // ESCORPIX: picotazos con el aguijon mientras lo sostienen.
+  scorpion:(enemy, holder) => {
+    carryChipDamage(holder, Math.max(1, Math.round(enemy.atk * 0.35)), enemyColorsFor(enemy).sting || '#ffea00');
+  },
+  // MOMIA-BOT: envuelve al mecha en vendas y lo frena.
+  mummy:(enemy, holder, first) => {
+    holder.slowTimer = Math.max(holder.slowTimer || 0, 100 + enemy.tier * 20);
+    spawnHitBurst(holder.x, holder.z, holder.y + 18, enemyColorsFor(enemy).body, 8);
+    carryChipDamage(holder, 1, enemyColorsFor(enemy).body);
+    if(first) showMsg('¡VENDADO!', 40);
+  },
+  // GNOMO-BOMBA: del susto enciende la mecha (explota si no lo lanzan).
+  gnome:(enemy, holder, first) => {
+    if(enemy.abil === 'fuse' || enemy.exploded) return;
+    enemy.abil = 'fuse';
+    enemy.abilT = Math.max(24, 58 - enemy.tier * 8);
+    enemy.abilLen = enemy.abilT;
+    sfx('shield');
+    if(first) showMsg('¡MECHA ENCENDIDA!', 40);
+  },
+  // PODA-BOT: las cuchillas raspan al mecha.
+  mower:(enemy, holder) => {
+    carryChipDamage(holder, Math.max(1, Math.round(enemy.atk * 0.3)), '#ffea00');
+    spawnHitBurst(enemy.x + enemy.facing * 10, enemy.z, enemy.y + 3, '#ffffff', 4);
+  },
+  // DRON-NEON: acelera los rotores y se escapa volando.
+  drone:(enemy, holder) => {
+    carryBreakFree(enemy, holder);
+    startCarryCounter(enemy, 'fly', -enemy.facing * 1.6, 0, holder);
+    spawnHitBurst(enemy.x, enemy.z, enemy.y + 8, enemyColorsFor(enemy).glow || '#00f0ff', 6);
+    sfx('flight_on');
+  },
+  // NINJA-HOLO: bomba de humo, reaparece a la espalda y corta.
+  ninja:(enemy, holder) => {
+    carryBreakFree(enemy, holder);
+    const glow = enemyColorsFor(enemy).glow || '#ff2e88';
+    spawnHitBurst(enemy.x, enemy.z, enemy.y + 10, '#d8d8d8', 12);
+    spawnHitBurst(enemy.x, enemy.z, enemy.y + 10, glow, 6);
+    enemy.x = clamp(holder.x - (holder.facing || 1) * 24, game.cameraX + 16, game.cameraX + W - 16);
+    enemy.z = clamp(holder.z, laneMinZ() + 1, laneMaxZ() - 1);
+    enemy.y = 0;
+    enemy.facing = holder.x >= enemy.x ? 1 : -1;
+    if(enemy.ability === 'blink'){
+      enemy.abil = 'appear';
+      enemy.abilT = 12;
+    } else {
+      enemy.state = 'attack';
+      enemy.stateTimer = 18;
+    }
+    spawnHitBurst(enemy.x, enemy.z, 12, glow, 8);
+    sfx('flight_on');
+  },
+  // HONGO-MECA: suelta su nube de veneno encima de quien lo carga.
+  shroom:(enemy, holder) => {
+    const color = enemyColorsFor(enemy).spore || '#b6ff4a';
+    addHazard({
+      kind:'spores',
+      x:(enemy.x + holder.x) / 2,
+      z:holder.z,
+      r:Math.round(22 + enemy.tier * 3),
+      life:110 + enemy.tier * 20,
+      dmg:enemy.tier >= 3 ? 2 : 1,
+      tick:24 - enemy.tier * 3,
+      color
+    });
+    spawnHitBurst(enemy.x, enemy.z, enemy.y + 10, color, 12);
+    sfx('shield_break');
+  },
+  // LOBO-X: muerde y se suelta.
+  wolf:(enemy, holder) => {
+    carryBreakFree(enemy, holder);
+    damagePlayer(holder, Math.round(enemy.atk * 0.9), enemy, { dir:enemy.facing, kb:CONFIG.physics.knockbackLight });
+    startCarryCounter(enemy, 'drop', -enemy.facing * 1.6, 1.8, holder);
+  },
+  // RANA-DARDO: resbaladiza, se escurre de las manos y salta lejos.
+  frog:(enemy, holder) => {
+    carryBreakFree(enemy, holder);
+    enemy.abil = 'hop';
+    startCarryCounter(enemy, 'hop', -enemy.facing * 2.4, 2.8, holder);
+    spawnHitBurst(enemy.x, enemy.z, enemy.y + 6, '#9fe8ff', 6);
+    sfx('dive_kick');
+  },
+  // CAMALEON: lengüetazo que roba energia del especial.
+  chameleon:(enemy, holder, first) => {
+    const drained = Math.min(holder.special, 10 + enemy.tier * 4);
+    if(drained > 0){
+      holder.special -= drained;
+      spawnHitBurst(holder.x, holder.z, holder.y + 20, CONFIG.hud.specialColor, 5);
+      if(first) showMsg('ENERGIA ROBADA', 40);
+    }
+    carryChipDamage(holder, 1, enemyColorsFor(enemy).tongue || '#ff5a8a');
+  },
+  // SLIME-X: gotea acido que deja un charco pegajoso.
+  slime:(enemy, holder) => {
+    const color = enemyColorsFor(enemy).body;
+    addHazard({
+      kind:'poison',
+      x:(enemy.x + holder.x) / 2,
+      z:holder.z,
+      r:Math.round(16 + enemy.tier * 2),
+      life:150 + enemy.tier * 20,
+      dmg:1,
+      tick:22 - enemy.tier * 2,
+      color
+    });
+    holder.slowTimer = Math.max(holder.slowTimer || 0, 60);
+    spawnHitBurst(enemy.x, enemy.z, enemy.y + 4, color, 8);
+    sfx('hit_light');
+  },
+  // CENTINELA: pulso del escudo que empuja al mecha y lo libera.
+  sentinel:(enemy, holder) => {
+    carryBreakFree(enemy, holder);
+    const colors = enemyColorsFor(enemy);
+    spawnHitBurst(enemy.x, enemy.z, enemy.y + 12, colors.shieldEdge || '#7ae8ff', 14);
+    game.flash = Math.max(game.flash, 2 * CONFIG.general.flashIntensity);
+    sfx('shield_break');
+    damagePlayer(holder, Math.max(1, Math.round(enemy.atk * 0.5)), enemy, { dir:enemy.facing, kb:CONFIG.physics.knockbackHeavy * 1.3 });
+    enemy.guardDown = 0;
+    startCarryCounter(enemy, 'drop', -enemy.facing * 0.8, 1.2, holder);
+  }
+};
 function updateThrownEntity(entity){
   entity.x += entity.vx;
   entity.z = clamp(entity.z + entity.vz, laneMinZ() + 2, laneMaxZ() - 2);
@@ -6190,6 +6527,7 @@ function setupStage(index, options = {}){
   showBig(runStageTag(), 90);
   const introLevel = currentStageLevel();
   showMsg(introLevel ? `${stageCfg().name} - ${introLevel.name}` : stageCfg().name, 80);
+  warmStageDecor();
   game.players.forEach((player, idx) => {
     const screenState = screenStates ? screenStates[idx] : null;
     const wasRepairState = player.repairState;
@@ -6198,8 +6536,12 @@ function setupStage(index, options = {}){
     player.char = CONFIG.players[player.charIdx];
     applyPlayerSize(player);
     player.maxHp = player.char.hp;
+    const hpBefore = player.hp;
     const carriedHp = wasRepairState === 'active' && player.hp > 0 ? player.hp + player.maxHp * .15 : 0;
     player.hp = wasRepairState === 'active' ? clamp(carriedHp, 1, player.maxHp) : 0;
+    // La reparacion entre etapas tambien ilumina de verde la cabina del celular.
+    if(player.hp > hpBefore + 0.5) player.healCount = (player.healCount || 0) + 1;
+    player.sosTimer = 0;
     player.maxShield = CONFIG.physics.shieldHp;
     player.shield = wasRepairState === 'active' ? player.maxShield : 0;
     player.maxSpecial = CONFIG.physics.specialMeterMax;
@@ -6952,11 +7294,14 @@ function updateEnemy(enemy){
   if(enemy.hp <= 0) return;
   // Temporizadores que corren aunque lo carguen o este derribado (la mecha
   // del gnomo sigue encendida en las manos de quien lo agarro).
-  if(enemy.ability) tickEnemyAbilityTimers(enemy);
+  if(enemy.ability || enemy.abil === 'fuse') tickEnemyAbilityTimers(enemy);
   if(enemy.hp <= 0) return;
   if(enemy.grabbedBy){
     const holder = game.players.find(p => p.id === enemy.grabbedBy && p.grabbed === enemy);
-    if(holder) return;
+    if(holder){
+      updateEnemyCarried(enemy, holder);
+      return;
+    }
     // Red de seguridad anti-softlock: nadie lo esta cargando realmente (el
     // cargador cayo o la referencia se perdio) -> soltarlo al piso en vez de
     // dejarlo congelado e inmortal bloqueando el fin del stage.
@@ -6989,6 +7334,11 @@ function updateEnemy(enemy){
       }
     }
     if(enemy.knockedDown === 0) enemy.state = 'walk';
+    return;
+  }
+  // Recien zafado de un mecha: cae, salta o vuela antes de volver a su IA.
+  if(enemy.carryCounter){
+    updateCarryCounter(enemy);
     return;
   }
   if(enemy.state === 'emerge'){
@@ -7162,7 +7512,8 @@ function interruptEnemyAbility(enemy){
 function tickEnemyAbilityTimers(enemy){
   if(enemy.revealT > 0) enemy.revealT--;
   if(enemy.guardDown > 0) enemy.guardDown--;
-  if(enemy.ability === 'kamikaze' && enemy.abil === 'fuse'){
+  // La mecha corre en cualquier sprite que la encienda (tambien al cargarlo).
+  if(enemy.abil === 'fuse'){
     enemy.abilT--;
     if(enemy.abilT % 5 === 0){
       game.parts.push(makePart(enemy.x + enemy.facing * 3, enemy.z, (enemy.y || 0) + 24, rand(-.4, .4), 0, rand(.4, 1), enemyColorsFor(enemy).spark, 10, 1));
@@ -7890,6 +8241,7 @@ function hazardDamagePlayer(player, damage, color){
     return;
   }
   player.hp -= damage;
+  notePlayerHurt(player, damage);
   player.flash = Math.max(player.flash, 3);
   spawnHitBurst(player.x, player.z, player.y + 10, color || '#8aff3a', 2);
 }
@@ -7924,6 +8276,15 @@ function updatePlayer(player, input){
     player.repairTimer = Math.max(0, player.repairTimer - 1);
     player.deadTimer = player.repairTimer;
     if(game.time % 8 === player.id % 8) spawnMechaSparks(player, .9);
+    // Boton de AYUDA: con el mecha caido, STRIKE o SYSTEM lanzan una bengala
+    // SOS sobre el mecha para que un aliado venga a repararlo (el operador de
+    // la cabina del celular la dispara por la escotilla).
+    player.sosTimer = Math.max(0, (player.sosTimer || 0) - 1);
+    if((input.lightPress || input.specialPress) && player.sosTimer < SOS_FLARE_FRAMES - 30){
+      player.sosTimer = SOS_FLARE_FRAMES;
+      player.sosCount = (player.sosCount || 0) + 1;
+      sfx('sos');
+    }
     if(player.repairTimer <= 0){
       player.repairState = 'destroyed';
       player.deadTimer = 999;
@@ -8888,10 +9249,11 @@ function drawFocusFrame(x, y, w, h, color, thickness = 3){
 }
 // ==== ARTE HD DE LOS MECHAKATZ (inicio) ====
 // Dibujados a resolucion nativa: 1 px del arte = 1 px de pantalla cuando el
-// mecha se ve a MECHA_HD_SCALE (≈52 px de alto con orejas). Hay vista lateral
-// (mirando a la DERECHA, (0,0) = pies; mechaPainter espeja), frontal y
-// trasera (giro 360° del escaner del celular) y derribado. El pelaje (coat)
-// pinta el patron de gato en cabeza, torso, patas y cola.
+// mecha se ve a MECHA_HD_SCALE (≈52 px de alto con orejas). El juego usa la
+// vista 3/4 (mirando a la DERECHA girado 45° hacia el espectador, como los
+// enemigos; (0,0) = pies; mechaPainter espeja). Ademas hay perfil puro,
+// frontal y trasera (giro 360° del escaner del celular) y derribado. El
+// pelaje (coat) pinta el patron de gato en cabeza, torso, patas y cola.
 // Este bloque se copia tal cual al mando del celular y al editor
 // (build_config_editor.js): no puede usar game ni CONFIG.
 const MECHA_HD_SCALE = 1.8;
@@ -8929,12 +9291,67 @@ function mechaMix(a, b, t){
   };
   return `#${[channel(16), channel(8), channel(0)].map(v => v.toString(16).padStart(2, '0')).join('')}`;
 }
+// ---- Operadores: los gatos que pilotan cada mecha ----
+// La cabina del celular dibuja al operador del personaje con su personalidad
+// (animaciones, gestos y frases). operator = 'auto' (segun el nombre) o un id
+// de OPERATOR_PERSONAS; pilotGender = 'auto' | 'm' | 'f'. Los pilotos del
+// show y el elenco por defecto ya traen la suya en OPERATOR_BY_NAME.
+const OPERATOR_PERSONAS = [
+  { value:'jugueton', label:'Jugueton', gender:'m' },
+  { value:'platicador', label:'Platicador euforico', gender:'m' },
+  { value:'elegante', label:'Sofisticado elegante', gender:'m' },
+  { value:'feroz', label:'Pequeña feroz', gender:'f' },
+  { value:'impetuoso', label:'Impetuoso', gender:'m' },
+  { value:'dulce', label:'Dulce y timida', gender:'f' },
+  { value:'diva', label:'Diva dramatica', gender:'f' },
+  { value:'agente', label:'Agente cool', gender:'m' },
+  { value:'alegre', label:'Alegre y suertuda', gender:'f' },
+  { value:'dormilon', label:'Gigante dormilon', gender:'m' },
+  { value:'hiperactiva', label:'Aventurera hiperactiva', gender:'f' },
+  { value:'genio', label:'Genio nerd', gender:'f' }
+];
+const OPERATOR_PERSONA_OPTIONS = [{ value:'auto', label:'Auto (segun el nombre)' }].concat(OPERATOR_PERSONAS);
+const OPERATOR_GENDERS = [
+  { value:'auto', label:'Auto (segun el nombre)' },
+  { value:'m', label:'Macho' },
+  { value:'f', label:'Hembra' }
+];
+// Nombre conocido -> [personalidad, genero].
+const OPERATOR_BY_NAME = {
+  MEFISTECH:['jugueton', 'm'], BEYLISZETA:['platicador', 'm'], BURTRON:['elegante', 'm'], ERISPRIME:['feroz', 'f'],
+  TIGRE:['impetuoso', 'm'], NIEVE:['dulce', 'f'], SIAM:['diva', 'f'], SMOKING:['agente', 'm'],
+  CALICO:['alegre', 'f'], COON:['dormilon', 'm'], BENGAL:['hiperactiva', 'f'], FOLD:['genio', 'f']
+};
+// Nombre desconocido: el orden del elenco (los 4 del show primero).
+const OPERATOR_ORDER = ['elegante', 'jugueton', 'feroz', 'platicador', 'impetuoso', 'dulce', 'diva', 'agente', 'alegre', 'dormilon', 'hiperactiva', 'genio'];
+function operatorKnownName(char){
+  return OPERATOR_BY_NAME[String(char && char.name || '').trim().toUpperCase()] || null;
+}
+function resolveOperatorPersona(char, idx = 0){
+  const pick = char && char.operator;
+  if(OPERATOR_PERSONAS.some(opt => opt.value === pick)) return pick;
+  const known = operatorKnownName(char);
+  if(known) return known[0];
+  const n = OPERATOR_ORDER.length;
+  return OPERATOR_ORDER[(((Math.round(idx) || 0) % n) + n) % n];
+}
+// El genero es del gato (su nombre), no de la personalidad elegida.
+function resolveOperatorGender(char, idx = 0){
+  const pick = char && char.pilotGender;
+  if(pick === 'm' || pick === 'f') return pick;
+  const known = operatorKnownName(char);
+  if(known) return known[1];
+  const def = OPERATOR_PERSONAS.find(opt => opt.value === resolveOperatorPersona(char, idx));
+  return def ? def.gender : 'm';
+}
 // Completa y valida el look de gato de un personaje (configs viejas incluidas).
 function sanitizeMechaLook(char, idx = 0){
   const valid = (list, value, fallback) => list.some(opt => opt.value === value) ? value : fallback;
   char.coat = valid(MECHA_COATS, char.coat, 'solid');
   char.ears = valid(MECHA_EARS, char.ears, 'normal');
   char.fx = valid(MECHA_FX, char.fx, MECHA_FX_ORDER[idx % MECHA_FX_ORDER.length]);
+  char.operator = valid(OPERATOR_PERSONA_OPTIONS, char.operator, 'auto');
+  char.pilotGender = valid(OPERATOR_GENDERS, char.pilotGender, 'auto');
   const body = safeHexColor(char.body, '#00f0ff');
   char.coatColor = safeHexColor(char.coatColor, shadeHex(body, 0.6));
   char.coatColor2 = safeHexColor(char.coatColor2, shadeHex(body, 0.35));
@@ -9018,6 +9435,36 @@ function mechaPainter(ox, oy, dir){
   };
   return { R, P, D, L };
 }
+// Tinta de caricatura: cada pieza (cola, mochila, piernas, torso, cabeza,
+// brazos) se dibuja primero en negro 1 px mas grande y encima a color, asi
+// queda delineada y se separa de las piezas que tiene detras. Los detalles
+// sueltos (P), las lineas de 1 px (bigotes, garras) y lo translucido
+// (escudo, brillos) no llevan tinta.
+const MECHA_INK = '#0b0b14';
+function mechaInkPainter(paint){
+  const solid = () => ctx.globalAlpha >= 0.99;
+  const R = (lx, ly, w, h) => {
+    if(w > 0 && h > 0 && solid()) paint.R(lx - 1, ly - 1, w + 2, h + 2, MECHA_INK);
+  };
+  const P = () => {};
+  const D = (lx, ly, r, color, squash = 1) => {
+    if(solid()) paint.D(lx, ly, r + 1, MECHA_INK, squash);
+  };
+  const L = (x0, y0, x1, y1, color, t = 3) => {
+    if(t > 1 && solid()) paint.L(x0, y0, x1, y1, MECHA_INK, t + 2);
+  };
+  // Pintor simetrico (vistas de frente y espalda).
+  const RS = (lx, ly, w, h) => {
+    R(lx, ly, w, h);
+    R(-lx - w, ly, w, h);
+  };
+  return { R, P, D, L, RS, PS:P };
+}
+// Dibuja una pieza entintada: draw recibe el pintor (R/P/D/L[/RS/PS]).
+function mechaInked(paint, draw){
+  draw(mechaInkPainter(paint));
+  draw(paint);
+}
 function drawMechaAura(x, y, char, scale = 1, intensity = 1){
   const bodyAura = char.body || '#00f0ff';
   const visorAura = char.visor || '#ffffff';
@@ -9081,7 +9528,7 @@ function mechaEar(R, P, pal, char, baseX, baseY, options = {}){
     P(tipX + (mirror ? -1 : 1), baseY - spec.rows.length - 1, tuft);
   }
 }
-// ---- Vista lateral (la del juego) ----
+// ---- Vista lateral (perfil puro; cola, patas y brazos se comparten con la 3/4) ----
 function mechaTailSide(R, P, D, pal, coat, u, anim, swing = 0){
   const pts = [[-9, -17], [-11, -18], [-13, -20], [-14, -23], [-15, -26], [-15, -29], [-14, -32], [-12, -34]];
   const sway = Math.sin(anim * 0.12);
@@ -9310,6 +9757,182 @@ function mechaArmsSide(R, P, L, D, pal, far, coat, u, state, frame, phase, anim,
     P(5 + swing, -16 + u, pal.glass);
   }
 }
+// ---- Vista 3/4 (la del juego) ----
+// Girado 45° hacia el espectador, como los enemigos: pecho y cara miran al
+// frente-derecha, el costado (x <= -5) queda en sombra y la mochila asoma
+// detras. El brazo cercano (derecho) reutiliza mechaArmsSide (arte de
+// perfil) corrido MECHA_ARM_SHIFT.near px hacia atras: suelto cuelga junto
+// al costado y el pecho queda a la vista; al golpear, alzarlo, cargar o
+// cubrirse vuelve al frente (mechaArmBackOffset). El lejano (izquierdo)
+// cuelga de su propio hombro, MECHA_FAR_SHOULDER: al frente del torso y 1 px
+// mas alto por la profundidad, siempre detras del cuerpo (asoman el
+// antebrazo y el puño por el borde del pecho; ver mechaFarArm34).
+const MECHA_ARM_SHIFT = { near:-7, far:0 };
+const MECHA_FAR_SHOULDER = { x:5, y:-29 };
+// Brazo lejano de la vista 3/4 fuera de combate. swing = balanceo al
+// caminar, opuesto al del brazo cercano.
+function mechaFarArm34(R, P, L, far, coat, u, state, phase){
+  const fist = mechaZoneColor(far, coat, 'paw');
+  const sx = MECHA_FAR_SHOULDER.x;
+  const sy = MECHA_FAR_SHOULDER.y + u;
+  const swing = -Math.round(phase * 2);
+  if(state === 'victory'){
+    // Brazo en alto al frente de la cabeza (V de victoria con el cercano).
+    L(sx, sy, 10, -43 + u, far.body, 3);
+    R(9, -48 + u, 4, 4, fist);
+  } else if(state === 'carry'){
+    // Sostiene la carga por detras del brazo cercano.
+    L(sx, sy, 9, -34 + u, far.body, 3);
+    R(9, -38 + u, 4, 4, fist);
+  } else if(state === 'dive'){
+    // Barrido hacia atras en la patada en picada.
+    L(sx, sy, -2, -32 + u, far.body, 3);
+    R(-6, -35 + u, 4, 3, fist);
+  } else {
+    // Sale de detras del pecho y cuelga junto a su borde delantero, 2 px mas
+    // arriba que el puño cercano.
+    L(sx, sy, 8 + swing, -23 + u, far.body, 3);
+    R(7 + swing, -23 + u, 4, 4, far.accent);
+    R(7 + swing, -20 + u, 4, 4, fist);
+  }
+}
+// Desplazamiento hacia atras de un brazo segun cuanto se estira: completo con
+// el puño suelto junto a la cadera (restX = x del puño en reposo del arte de
+// perfil) y nulo con el puño al frente o por encima de la cabeza.
+function mechaArmBackOffset(fist, restX, shift){
+  const ext = clamp(Math.max((fist[0] - restX) / 10, (-17 - fist[1]) / 20), 0, 1);
+  return Math.round(shift * (1 - ext));
+}
+// Centro del nucleo de energia en el pecho 3/4 (brillos y especiales).
+const MECHA_CORE = { x:1, y:-26 };
+function mechaBackpack34(R, P, pal, u){
+  R(-10, -29 + u, 4, 11, pal.metalLo);
+  R(-10, -29 + u, 4, 1, pal.metal);
+  P(-10, -28 + u, pal.metalHi);
+  for(let k = 0; k < 3; k++) R(-10, -26 + k * 2 + u, 2, 1, pal.glass);
+  R(-10, -18 + u, 3, 2, pal.metalLo);
+}
+function mechaTorso34(R, P, pal, coat, u, glow){
+  // Cadera y cinturon: el tramo del costado en sombra, hebilla al frente.
+  R(-7, -17 + u, 14, 4, pal.accent);
+  R(-7, -17 + u, 14, 1, pal.accentHi);
+  R(-7, -14 + u, 14, 1, pal.accentLo);
+  R(-7, -17 + u, 3, 4, pal.accentLo);
+  R(0, -17 + u, 3, 3, pal.metal);
+  P(0, -17 + u, pal.metalHi);
+  // Pecho: costado en sombra a la izquierda, arista con luz y frente.
+  R(-6, -30 + u, 12, 1, pal.bodyHi);
+  R(-7, -29 + u, 14, 12, pal.body);
+  R(-7, -29 + u, 3, 11, pal.bodyLo);
+  R(-6, -30 + u, 2, 1, pal.body);
+  R(-4, -29 + u, 1, 11, pal.bodyHi);
+  R(-3, -29 + u, 8, 1, pal.bodyHi);
+  R(6, -28 + u, 1, 10, pal.bodyLo);
+  R(-6, -18 + u, 13, 1, pal.bodyLo);
+  if(coat === 'tabby'){
+    for(let k = 0; k < 3; k++){
+      R(-7, -28 + k * 3 + u, 3, 1, pal.coat);
+      R(5, -27 + k * 3 + u, 2, 1, pal.coat);
+    }
+  } else if(coat === 'spots'){
+    [[-6, -27], [-6, -22], [5, -27], [5, -22]].forEach(([sx, sy]) => {
+      R(sx, sy + u, 2, 2, pal.coat);
+      P(sx + 1, sy + 1 + u, pal.coat2);
+    });
+  } else if(coat === 'calico'){
+    R(-7, -29 + u, 5, 4, pal.coat);
+    R(3, -23 + u, 4, 3, pal.coat2);
+  } else if(coat === 'tortie'){
+    [[-6, -28, 'coat'], [-7, -25, 'coat2'], [-5, -22, 'coat'], [-6, -20, 'coat2'], [5, -27, 'coat'], [5, -22, 'coat2']].forEach(([sx, sy, key]) => {
+      R(sx, sy + u, 2, 1 + ((sx + sy) & 1), pal[key]);
+    });
+  }
+  // Placa del pecho centrada en el frente (mas ancha en el esmoquin).
+  const bib = coat === 'tuxedo' ? 1 : 0;
+  R(-2 - bib, -28 + u, 7 + bib * 2, 9, pal.belly);
+  R(-2 - bib, -28 + u, 7 + bib * 2, 1, pal.bellyHi);
+  R(-2 - bib, -22 + u, 7 + bib * 2, 1, pal.bellyLo);
+  R(4 + bib, -27 + u, 1, 8, pal.bellyLo);
+  // Nucleo de energia.
+  R(MECHA_CORE.x - 2, MECHA_CORE.y - 1 + u, 4, 3, pal.glass);
+  R(MECHA_CORE.x - 1, MECHA_CORE.y + u, 2, 1, glow ? pal.visorHi : pal.visor);
+  R(-1, -32 + u, 5, 2, pal.metalLo);
+}
+function mechaHead34(R, P, L, pal, far, char, h, anim){
+  const coat = char.coat;
+  // Oreja lejana (derecha) detras del craneo.
+  mechaEar(R, P, pal, char, 3, -46 + h, { mirror:true });
+  // Craneo: nuca en sombra a la izquierda, cara al frente-derecha.
+  R(-5, -46 + h, 12, 1, pal.body);
+  R(-6, -45 + h, 14, 1, pal.body);
+  R(-7, -44 + h, 16, 10, pal.body);
+  R(-6, -34 + h, 14, 1, pal.body);
+  R(-5, -33 + h, 12, 1, pal.bodyLo);
+  R(-3, -46 + h, 8, 1, pal.bodyHi);
+  R(-4, -45 + h, 10, 1, pal.bodyHi);
+  R(-7, -43 + h, 2, 8, pal.bodyLo);
+  R(-6, -34 + h, 13, 1, pal.bodyLo);
+  R(8, -43 + h, 1, 8, pal.bodyLo);
+  if(coat === 'tabby'){
+    R(-7, -42 + h, 2, 1, pal.coat);
+    R(-7, -39 + h, 2, 1, pal.coat);
+    R(-1, -45 + h, 1, 3, pal.coat);
+    R(1, -45 + h, 1, 2, pal.coat);
+    R(6, -45 + h, 1, 3, pal.coat);
+  } else if(coat === 'spots'){
+    R(-6, -43 + h, 2, 2, pal.coat);
+    P(-2, -44 + h, pal.coat);
+    P(6, -44 + h, pal.coat);
+    P(-5, -37 + h, pal.coat);
+  } else if(coat === 'calico'){
+    R(-7, -44 + h, 5, 4, pal.coat);
+  } else if(coat === 'tortie'){
+    P(-5, -43 + h, pal.coat);
+    P(-6, -39 + h, pal.coat2);
+    P(-2, -44 + h, pal.coat);
+    P(6, -43 + h, pal.coat2);
+  }
+  // Placa de la frente con remache.
+  R(1, -47 + h, 5, 2, pal.accent);
+  P(1, -47 + h, pal.accentHi);
+  // Visor envolvente con los dos ojos: el cercano entero, el lejano angosto
+  // (escorzo) junto al borde de la cara.
+  R(-3, -42 + h, 12, 4, pal.glass);
+  R(-2, -42 + h, 10, 1, pal.glassHi);
+  const blink = (Math.floor(anim) % 170) < 4;
+  if(blink){
+    R(-1, -40 + h, 3, 1, pal.visor);
+    R(5, -40 + h, 2, 1, pal.visor);
+  } else {
+    R(-1, -41 + h, 3, 2, pal.visor);
+    P(0, -41 + h, '#ffffff');
+    R(5, -41 + h, 2, 2, pal.visor);
+    P(5, -41 + h, '#ffffff');
+    R(7, -41 + h, 1, 2, pal.visorLo);
+  }
+  // Mascara (siames) y hocico de tres cuartos: la nariz queda corrida al
+  // frente y la mejilla blindada del lado cercano.
+  if(coat === 'points') R(-2, -38 + h, 10, 5, pal.coat);
+  const muzzle = mechaZoneColor(pal, coat, 'mask');
+  R(1, -37 + h, 8, 4, muzzle);
+  R(1, -37 + h, 8, 1, mechaLit(pal, muzzle));
+  R(9, -36 + h, 1, 2, shadeHex(muzzle, 0.8));
+  R(5, -38 + h, 3, 1, pal.nose);
+  P(6, -38 + h, pal.noseHi);
+  P(3, -34 + h, shadeHex(muzzle, 0.62));
+  R(4, -33 + h, 3, 1, shadeHex(muzzle, 0.62));
+  P(7, -34 + h, shadeHex(muzzle, 0.62));
+  R(-5, -37 + h, 3, 3, pal.accent);
+  P(-5, -37 + h, pal.accentHi);
+  // Bigotes-antena a los dos lados del hocico.
+  const twitch = Math.sin(anim * 0.1) > 0.92 ? 1 : 0;
+  L(10, -36 + h, 13, -37 + h - twitch, pal.metalHi, 1);
+  L(10, -35 + h, 13, -34 + h, pal.metalHi, 1);
+  L(0, -36 + h, -4, -37 + h, pal.metalHi, 1);
+  L(0, -35 + h, -4, -34 + h, pal.metalHi, 1);
+  // Oreja cercana (izquierda) al frente.
+  mechaEar(R, P, pal, char, -6, -46 + h);
+}
 // ---- Poses de combate (combo, golpe fuerte, remate y especiales) ----
 // Cada movimiento es una lista de claves en t (0..1 del movimiento). Cada
 // clave pisa valores de MECHA_GUARD (guardia de pelea): bx/u = inclinacion y
@@ -9325,7 +9948,10 @@ const MECHA_GUARD = {
   ne:[5, -24], nf:[8, -27], fe:[0, -22], ff:[4, -25],
   fistN:4, fistF:4, clawN:0, clawF:0, glow:0, eye:0, tail:0, farFront:false, view:'side'
 };
-const MECHA_REST = { ne:[2, -22], nf:[3, -17], fe:[-4, -21], ff:[-4, -17] };
+// Brazos sueltos: el cercano en coordenadas del arte de perfil (drawMechaCombat
+// lo corre hacia la espalda con mechaArmBackOffset igual que la pose normal
+// 3/4) y el lejano colgando de su hombro al frente, como en mechaFarArm34.
+const MECHA_REST = { ne:[2, -22], nf:[3, -17], fe:[8, -22], ff:[9, -18] };
 // Duracion en cuadros de cada movimiento (el juego usa los mismos valores).
 const MECHA_MOVE_FRAMES = { jab:12, cross:12, upper:12, haymaker:18, finisher:33, special:28, shoot:10 };
 // Cuadro (stateTimer) en que el especial dispara: 14 de carga y 14 de salida.
@@ -9553,10 +10179,11 @@ function mechaMoveSmears(R, move, t, pose, pal, bullet){
     mechaSpeedLines(R, -2, 14, -30, glowColor, a);
   }
 }
-// Mecha de perfil. state/frame como en el juego (attack, heavy, shield,
-// special, victory, carry, dive, repair, walk/run, idle). En los ataques,
-// frame es el stateTimer (cuenta hacia atras) y move el golpe del combo
-// ('jab' | 'cross' | 'upper' | 'finisher'); 'shoot' anima el disparo en vuelo.
+// Mecha en vista 3/4 (la del juego). state/frame como en el juego (attack,
+// heavy, shield, special, victory, carry, dive, repair, walk/run, idle). En
+// los ataques, frame es el stateTimer (cuenta hacia atras) y move el golpe
+// del combo ('jab' | 'cross' | 'upper' | 'finisher'); 'shoot' anima el
+// disparo en vuelo.
 function drawMechaHD(x, y, char, facing, anim, state, frame, move){
   const dir = facing < 0 ? -1 : 1;
   const pal = mechaPalette(char);
@@ -9570,7 +10197,11 @@ function drawMechaHD(x, y, char, facing, anim, state, frame, move){
     drawMechaCombat(x, y, char, dir, anim, combatMove, 1 - clamp(frame, 0, mechaMoveFrames(combatMove)) / mechaMoveFrames(combatMove), pal, far, coat);
     return;
   }
-  const { R, P, D, L } = mechaPainter(x, y, dir);
+  const paint = mechaPainter(x, y, dir);
+  // El cercano suelto cuelga a la altura de la espalda; al cargar o
+  // cubrirse, al frente. El lejano cuelga de su hombro (mechaFarArm34).
+  const armsForward = state === 'carry' || state === 'shield';
+  const nearArm = mechaPainter(x + dir * (armsForward ? 0 : MECHA_ARM_SHIFT.near), y, dir);
   ctx.fillStyle = 'rgba(0,0,0,.4)';
   ctx.beginPath();
   ctx.ellipse(x, y, 15, 4.5, 0, 0, TAU);
@@ -9579,24 +10210,55 @@ function drawMechaHD(x, y, char, facing, anim, state, frame, move){
   const phase = walking ? Math.sin(anim * 0.4) : 0;
   let u = walking ? -Math.round(Math.abs(phase)) : 0;
   if(state === 'victory') u = Math.round(Math.sin(anim * 0.28) * 2);
-  mechaTailSide(R, P, D, pal, coat, u, anim);
-  mechaArmsSide(R, P, L, D, pal, far, coat, u, state, frame, phase, anim, 'far');
+  // Cada pieza con su tinta, de atras hacia adelante.
+  mechaInked(paint, p => mechaTailSide(p.R, p.P, p.D, pal, coat, u, anim));
+  mechaInked(paint, p => mechaBackpack34(p.R, p.P, pal, u));
+  mechaInked(paint, p => mechaFarArm34(p.R, p.P, p.L, far, coat, u, state, phase));
+  // Vista 3/4: la pierna derecha (cercana, a color) queda del lado de la
+  // espalda, como el brazo derecho, y la izquierda (lejana, en sombra) al
+  // frente. Al caminar cada pierna avanza con el brazo contrario.
   if(state === 'dive'){
-    // Patada en picada: pierna cercana estirada al frente, la otra recogida.
-    L(-3, -14, -1, -9, far.body, 4);
-    R(-3, -9, 5, 3, mechaZoneColor(far, coat, 'paw'));
-    L(2, -14, 9, -6, pal.body, 4);
-    R(8, -8, 6, 4, mechaZoneColor(pal, coat, 'paw'));
-    R(14, -8, 2, 1, pal.claw);
-    R(14, -6, 2, 1, pal.claw);
+    // Patada en picada: la izquierda recogida al frente y la derecha
+    // estirada cruzando por delante.
+    mechaInked(paint, p => {
+      p.L(3, -14, 4, -9, far.body, 4);
+      p.R(2, -9, 5, 3, mechaZoneColor(far, coat, 'paw'));
+    });
+    mechaInked(paint, p => {
+      p.L(-4, -14, 8, -7, pal.body, 4);
+      p.R(7, -9, 6, 4, mechaZoneColor(pal, coat, 'paw'));
+      p.R(13, -9, 2, 1, pal.claw);
+      p.R(13, -7, 2, 1, pal.claw);
+    });
   } else {
     const stride = Math.round(phase * 3);
-    mechaLegSide(R, P, L, far, coat, -3, -stride, phase < -0.4 ? 1 : 0, false);
-    mechaLegSide(R, P, L, pal, coat, 2, stride, phase > 0.4 ? 1 : 0, true);
+    mechaInked(paint, p => mechaLegSide(p.R, p.P, p.L, far, coat, 3, stride, phase > 0.4 ? 1 : 0, false));
+    mechaInked(paint, p => mechaLegSide(p.R, p.P, p.L, pal, coat, -4, -stride, phase < -0.4 ? 1 : 0, true));
   }
-  mechaTorsoSide(R, P, pal, coat, u, Math.floor(anim / 20) % 2 === 0);
-  mechaHeadSide(R, P, L, pal, far, char, u, anim);
-  mechaArmsSide(R, P, L, D, pal, far, coat, u, state, frame, phase, anim, 'near');
+  mechaInked(paint, p => mechaTorso34(p.R, p.P, pal, coat, u, Math.floor(anim / 20) % 2 === 0));
+  mechaInked(paint, p => mechaHead34(p.R, p.P, p.L, pal, far, char, u, anim));
+  mechaInked(nearArm, p => mechaArmsSide(p.R, p.P, p.L, p.D, pal, far, coat, u, state, frame, phase, anim, 'near'));
+}
+// Mecha de perfil puro en reposo: vista lateral del giro 360° del escaner
+// del celular (el juego usa la vista 3/4 de drawMechaHD).
+function drawMechaHDSide(x, y, char, facing, anim){
+  const dir = facing < 0 ? -1 : 1;
+  const pal = mechaPalette(char);
+  const far = mechaPalette(char, true);
+  const coat = char.coat || 'solid';
+  if(!hdTrack && !char.noAura) drawMechaAura(x, y, char, MECHA_HD_SCALE, 1);
+  const paint = mechaPainter(x, y, dir);
+  ctx.fillStyle = 'rgba(0,0,0,.4)';
+  ctx.beginPath();
+  ctx.ellipse(x, y, 15, 4.5, 0, 0, TAU);
+  ctx.fill();
+  mechaInked(paint, p => mechaTailSide(p.R, p.P, p.D, pal, coat, 0, anim));
+  mechaInked(paint, p => mechaArmsSide(p.R, p.P, p.L, p.D, pal, far, coat, 0, 'idle', 0, 0, anim, 'far'));
+  mechaInked(paint, p => mechaLegSide(p.R, p.P, p.L, far, coat, -3, 0, 0, false));
+  mechaInked(paint, p => mechaLegSide(p.R, p.P, p.L, pal, coat, 2, 0, 0, true));
+  mechaInked(paint, p => mechaTorsoSide(p.R, p.P, pal, coat, 0, Math.floor(anim / 20) % 2 === 0));
+  mechaInked(paint, p => mechaHeadSide(p.R, p.P, p.L, pal, far, char, 0, anim));
+  mechaInked(paint, p => mechaArmsSide(p.R, p.P, p.L, p.D, pal, far, coat, 0, 'idle', 0, 0, anim, 'near'));
 }
 // Mecha en pose de combate (t = avance 0..1 del movimiento).
 function drawMechaCombat(x, y, char, dir, anim, move, t, pal, far, coat){
@@ -9610,7 +10272,7 @@ function drawMechaCombat(x, y, char, dir, anim, move, t, pal, far, coat){
   ctx.ellipse(x, y, Math.max(8, 15 + lift * 0.6), Math.max(2.5, 4.5 + lift * 0.15), 0, 0, TAU);
   ctx.fill();
   const liftY = y + Math.round(lift);
-  // Giro del remate: vistas de espalda / frente / perfil opuesto.
+  // Giro del remate: vistas de espalda / frente / 3/4 opuesto.
   if(pose.view === 'back' || pose.view === 'front'){
     if(pose.view === 'back') drawMechaHDBack(x, liftY, char, anim);
     else drawMechaHDFront(x, liftY, char, anim);
@@ -9624,39 +10286,49 @@ function drawMechaCombat(x, y, char, dir, anim, move, t, pal, far, coat){
   const head = mechaPainter(x + viewDir * (bx + Math.round(pose.hx)), liftY, viewDir);
   const c = Math.round(crouch);
   const u = c;
-  mechaTailSide(body.R, body.P, body.D, pal, coat, u, anim, pose.tail);
+  mechaInked(body, p => mechaTailSide(p.R, p.P, p.D, pal, coat, u, anim, pose.tail));
+  mechaInked(body, p => mechaBackpack34(p.R, p.P, pal, u));
   const farPal = pose.farFront ? pal : far;
-  const drawFarArm = () => mechaArmPose(body.R, body.P, body.L, body.D, farPal, coat,
-    -3, -27 + u, Math.round(pose.fe[0]), Math.round(pose.fe[1]) + u, Math.round(pose.ff[0]), Math.round(pose.ff[1]) + u,
-    pose.fistF, pose.clawF, false);
+  // Vista 3/4: el brazo cercano suelto queda a la altura de la espalda y
+  // vuelve al frente al estirarse (MECHA_ARM_SHIFT / mechaArmBackOffset); el
+  // lejano sale de su hombro al frente del torso (MECHA_FAR_SHOULDER).
+  const nearOff = mechaArmBackOffset(pose.nf, MECHA_REST.nf[0], MECHA_ARM_SHIFT.near);
+  const farOff = mechaArmBackOffset(pose.ff, MECHA_REST.ff[0], MECHA_ARM_SHIFT.far);
+  const drawFarArm = () => mechaInked(body, p => mechaArmPose(p.R, p.P, p.L, p.D, farPal, coat,
+    MECHA_FAR_SHOULDER.x + farOff, MECHA_FAR_SHOULDER.y + u, Math.round(pose.fe[0]) + farOff, Math.round(pose.fe[1]) + u, Math.round(pose.ff[0]) + farOff, Math.round(pose.ff[1]) + u,
+    pose.fistF, pose.clawF, false));
   if(!pose.farFront) drawFarArm();
   const stepF = Math.round(pose.stepF);
   const stepB = Math.round(pose.stepB);
-  mechaLegSide(legs.R, legs.P, legs.L, far, coat, -3 + bx, stepB - bx, 0, false, c);
-  mechaLegSide(legs.R, legs.P, legs.L, pal, coat, 2 + bx, stepF - bx, 0, true, c);
-  mechaTorsoSide(body.R, body.P, pal, coat, u, pose.glow > 0.3 || Math.floor(anim / 20) % 2 === 0);
+  // Izquierda (lejana) al frente con el paso delantero; derecha (cercana)
+  // del lado de la espalda con el paso trasero.
+  mechaInked(legs, p => mechaLegSide(p.R, p.P, p.L, far, coat, 3 + bx, stepF - bx, 0, false, c));
+  mechaInked(legs, p => mechaLegSide(p.R, p.P, p.L, pal, coat, -4 + bx, stepB - bx, 0, true, c));
+  mechaInked(body, p => mechaTorso34(p.R, p.P, pal, coat, u, pose.glow > 0.3 || Math.floor(anim / 20) % 2 === 0));
   if(pose.glow > 0.05){
     const oldAlpha = ctx.globalAlpha;
     ctx.globalAlpha = oldAlpha * Math.min(0.7, 0.2 + pose.glow * 0.5);
-    body.D(-2, -25 + u, Math.round(2 + pose.glow * 3), pal.visorHi);
+    body.D(MECHA_CORE.x, MECHA_CORE.y + u, Math.round(2 + pose.glow * 3), pal.visorHi);
     ctx.globalAlpha = oldAlpha;
   }
-  mechaHeadSide(head.R, head.P, head.L, pal, far, char, u + Math.round(pose.hy), anim);
+  mechaInked(head, p => mechaHead34(p.R, p.P, p.L, pal, far, char, u + Math.round(pose.hy), anim));
   if(pose.eye > 0.1){
-    // Destello de los ojos: estela que sale hacia atras del visor.
+    // Destello de los ojos: estela que sale hacia atras de los dos ojos.
     const len = Math.round(3 + pose.eye * 7);
+    const hy = u + Math.round(pose.hy);
     const oldAlpha = ctx.globalAlpha;
     ctx.globalAlpha = oldAlpha * Math.min(0.7, pose.eye * 0.7);
-    head.R(4 - len, -41 + u + Math.round(pose.hy), len, 1, pal.visorHi);
-    head.R(1 - len, -40 + u + Math.round(pose.hy), len - 2, 1, pal.visor);
+    head.R(-1 - len, -41 + hy, len, 1, pal.visorHi);
+    head.R(-3 - len, -40 + hy, len - 2, 1, pal.visor);
+    head.R(2, -41 + hy, 3, 1, pal.visorHi);
     ctx.globalAlpha = oldAlpha;
   }
   if(pose.farFront) drawFarArm();
-  mechaArmPose(body.R, body.P, body.L, body.D, pal, coat,
-    1, -28 + u, Math.round(pose.ne[0]), Math.round(pose.ne[1]) + u, Math.round(pose.nf[0]), Math.round(pose.nf[1]) + u,
-    pose.fistN, pose.clawN, true);
+  mechaInked(body, p => mechaArmPose(p.R, p.P, p.L, p.D, pal, coat,
+    1 + nearOff, -28 + u, Math.round(pose.ne[0]) + nearOff, Math.round(pose.ne[1]) + u, Math.round(pose.nf[0]) + nearOff, Math.round(pose.nf[1]) + u,
+    pose.fistN, pose.clawN, true));
   const shifted = Object.assign({}, pose, {
-    nf:[pose.nf[0], pose.nf[1] + u], ff:[pose.ff[0], pose.ff[1] + u]
+    nf:[pose.nf[0] + nearOff, pose.nf[1] + u], ff:[pose.ff[0] + farOff, pose.ff[1] + u]
   });
   mechaMoveSmears(body.R, move, t, shifted, pal, char.bullet);
 }
@@ -9725,13 +10397,18 @@ function mechaHeadFrontShape(R, RS, pal){
 function drawMechaHDFront(x, y, char, anim){
   const pal = mechaPalette(char);
   const coat = char.coat || 'solid';
-  const { R, P, L, RS, PS } = mechaSymPainter(x, y);
+  const paint = mechaSymPainter(x, y);
   ctx.fillStyle = 'rgba(0,0,0,.4)';
   ctx.beginPath();
   ctx.ellipse(x, y, 13, 4, 0, 0, TAU);
   ctx.fill();
-  mechaTailFront(R, P, pal, coat, anim, false);
-  mechaLegsFront(RS, PS, R, pal, coat, false);
+  mechaInked(paint, p => mechaTailFront(p.R, p.P, pal, coat, anim, false));
+  mechaInked(paint, p => mechaLegsFront(p.RS, p.PS, p.R, pal, coat, false));
+  mechaInked(paint, p => mechaTorsoFront(p, pal, coat, anim));
+  mechaInked(paint, p => mechaArmsFront(p.RS, pal, coat, false));
+  mechaInked(paint, p => mechaHeadFront(p, pal, char, anim));
+}
+function mechaTorsoFront({ R, P, RS, PS }, pal, coat, anim){
   R(-8, -18, 16, 4, pal.accent);
   R(-8, -18, 16, 1, pal.accentHi);
   R(-8, -15, 16, 1, pal.accentLo);
@@ -9753,16 +10430,21 @@ function drawMechaHDFront(x, y, char, anim){
   R(-3 - bib, -23, 6 + bib * 2, 1, pal.bellyLo);
   R(-2, -27, 4, 3, pal.glass);
   R(-1, -26, 2, 1, Math.floor(anim / 20) % 2 === 0 ? pal.visorHi : pal.visor);
-  // Brazos a los costados.
+  R(-2, -32, 4, 2, pal.metalLo);
+}
+// Brazos a los costados (frente y espalda).
+function mechaArmsFront(RS, pal, coat, back){
   const fist = mechaZoneColor(pal, coat, 'paw');
   RS(-13, -30, 5, 4, pal.accent);
-  RS(-13, -30, 5, 1, pal.accentHi);
+  if(!back) RS(-13, -30, 5, 1, pal.accentHi);
   RS(-12, -26, 3, 5, pal.body);
   RS(-12, -21, 3, 4, pal.accent);
   RS(-13, -17, 4, 4, fist);
-  RS(-13, -17, 4, 1, mechaLit(pal, fist));
-  R(-2, -32, 4, 2, pal.metalLo);
-  // Cabeza de frente: orejas, visor con dos ojos, hocico y bigotes.
+  if(!back) RS(-13, -17, 4, 1, mechaLit(pal, fist));
+}
+// Cabeza de frente: orejas, visor con dos ojos, hocico y bigotes.
+function mechaHeadFront({ R, P, L, RS, PS }, pal, char, anim){
+  const coat = char.coat || 'solid';
   mechaEar(R, P, pal, char, -8, -46);
   mechaEar(R, P, pal, char, 2, -46, { mirror:true });
   mechaHeadFrontShape(R, RS, pal);
@@ -9797,16 +10479,22 @@ function drawMechaHDFront(x, y, char, anim){
 function drawMechaHDBack(x, y, char, anim){
   const pal = mechaPalette(char);
   const coat = char.coat || 'solid';
-  const { R, P, RS, PS } = mechaSymPainter(x, y);
+  const paint = mechaSymPainter(x, y);
   ctx.fillStyle = 'rgba(0,0,0,.4)';
   ctx.beginPath();
   ctx.ellipse(x, y, 13, 4, 0, 0, TAU);
   ctx.fill();
-  mechaLegsFront(RS, PS, R, pal, coat, true);
+  mechaInked(paint, p => mechaLegsFront(p.RS, p.PS, p.R, pal, coat, true));
+  mechaInked(paint, p => mechaTorsoBack(p, pal, coat));
+  mechaInked(paint, p => mechaArmsFront(p.RS, pal, coat, true));
+  mechaInked(paint, p => mechaTailFront(p.R, p.P, pal, coat, anim, true));
+  mechaInked(paint, p => mechaHeadBack(p, pal, char));
+}
+// Espalda con mochila, ventilas y dos toberas.
+function mechaTorsoBack({ R, P, RS, PS }, pal, coat){
   R(-8, -18, 16, 4, pal.accent);
   R(-8, -18, 16, 1, pal.accentHi);
   R(-8, -15, 16, 1, pal.accentLo);
-  // Espalda con mochila, ventilas y dos toberas.
   R(-7, -31, 14, 1, pal.bodyHi);
   R(-8, -30, 16, 12, pal.body);
   R(-8, -30, 1, 11, pal.bodyHi);
@@ -9821,14 +10509,11 @@ function drawMechaHDBack(x, y, char, anim){
   for(let k = 0; k < 3; k++) R(-3, -27 + k * 2, 6, 1, pal.glass);
   RS(-4, -20, 3, 2, pal.metalLo);
   RS(-4, -18, 3, 1, pal.glass);
-  const fist = mechaZoneColor(pal, coat, 'paw');
-  RS(-13, -30, 5, 4, pal.accent);
-  RS(-12, -26, 3, 5, pal.body);
-  RS(-12, -21, 3, 4, pal.accent);
-  RS(-13, -17, 4, 4, fist);
-  mechaTailFront(R, P, pal, coat, anim, true);
   R(-2, -32, 4, 2, pal.metalLo);
-  // Nuca: sin cara, con placa y puerto de datos.
+}
+// Nuca: sin cara, con placa y puerto de datos.
+function mechaHeadBack({ R, P, RS }, pal, char){
+  const coat = char.coat || 'solid';
   const earColor = mechaZoneColor(pal, coat, 'ear');
   mechaEar(R, P, pal, char, -8, -46, { back:true, color:earColor });
   mechaEar(R, P, pal, char, 2, -46, { back:true, mirror:true, color:earColor });
@@ -9846,19 +10531,31 @@ function drawMechaHDBack(x, y, char, anim){
 function drawMechaHDDown(x, y, char, facing = 1){
   const pal = mechaPalette(char);
   const coat = char.coat || 'solid';
-  const { R, P } = mechaPainter(x, y, facing < 0 ? -1 : 1);
+  const paint = mechaPainter(x, y, facing < 0 ? -1 : 1);
   ctx.fillStyle = 'rgba(0,0,0,.4)';
   ctx.beginPath();
   ctx.ellipse(x, y, 20, 5, 0, 0, TAU);
   ctx.fill();
   const tail = mechaZoneColor(pal, coat, 'tail');
-  R(-27, -3, 8, 2, tail);
-  R(-29, -4, 3, 2, pal.visorLo);
   const paw = mechaZoneColor(pal, coat, 'paw');
-  R(-21, -6, 7, 3, pal.accent);
-  R(-24, -6, 4, 4, paw);
-  R(-21, -3, 7, 3, pal.accentLo);
-  R(-24, -3, 4, 3, shadeHex(paw, 0.8));
+  mechaInked(paint, ({ R }) => {
+    R(-27, -3, 8, 2, tail);
+    R(-29, -4, 3, 2, pal.visorLo);
+  });
+  mechaInked(paint, ({ R }) => {
+    R(-21, -6, 7, 3, pal.accent);
+    R(-24, -6, 4, 4, paw);
+    R(-21, -3, 7, 3, pal.accentLo);
+    R(-24, -3, 4, 3, shadeHex(paw, 0.8));
+  });
+  mechaInked(paint, p => mechaBodyDown(p, pal, coat));
+  mechaInked(paint, ({ R }) => {
+    R(-4, -13, 6, 3, pal.body);
+    R(-1, -14, 4, 3, paw);
+  });
+  mechaInked(paint, p => mechaHeadDown(p, pal, coat));
+}
+function mechaBodyDown({ R }, pal, coat){
   R(-15, -10, 18, 9, pal.body);
   R(-15, -10, 18, 1, pal.bodyHi);
   R(-15, -2, 18, 1, pal.bodyLo);
@@ -9867,8 +10564,9 @@ function drawMechaHDDown(x, y, char, facing = 1){
   if(coat === 'spots') for(let k = 0; k < 3; k++) R(-12 + k * 5, -8, 2, 2, pal.coat);
   R(-6, -8, 6, 5, pal.belly);
   R(-14, -12, 8, 3, pal.metal);
-  R(-4, -13, 6, 3, pal.body);
-  R(-1, -14, 4, 3, mechaZoneColor(pal, coat, 'paw'));
+}
+// Cabeza tendida con los ojos en X.
+function mechaHeadDown({ R, P }, pal, coat){
   R(3, -14, 14, 12, pal.body);
   R(3, -14, 14, 1, pal.bodyHi);
   R(3, -3, 14, 1, pal.bodyLo);
@@ -10023,8 +10721,189 @@ function enemyColorsFor(enemy){
 }
 // scale = tamaño en pantalla (enemySizeMul en el juego; las vistas previas
 // del editor dibujan a 1x).
+// ---- Reaccion al ser cargado por un mecha (dibujo) ----
+// Tiempos de cada sprite: act = hace algo ademas de forcejear, warn =
+// cuadros de aviso (pose + "!") antes de la accion, every = cada cuantos
+// cuadros la repite (0 = una sola vez). La conducta vive en CARRY_ACTIONS
+// (juego) y los textos en ENEMY_CARRY_INFO (pestaña ENEMIES).
+const ENEMY_CARRY_REACTIONS = {
+  small:{ act:false, warn:0, every:0 },
+  big:{ act:true, warn:18, every:0 },
+  thrower:{ act:true, warn:18, every:0 },
+  scorpion:{ act:true, warn:8, every:26 },
+  mummy:{ act:true, warn:12, every:70 },
+  gnome:{ act:true, warn:14, every:0 },
+  mower:{ act:true, warn:10, every:24 },
+  drone:{ act:true, warn:16, every:0 },
+  ninja:{ act:true, warn:12, every:0 },
+  shroom:{ act:true, warn:22, every:100 },
+  wolf:{ act:true, warn:10, every:0 },
+  frog:{ act:true, warn:8, every:0 },
+  chameleon:{ act:true, warn:10, every:40 },
+  slime:{ act:true, warn:14, every:80 },
+  sentinel:{ act:true, warn:18, every:0 }
+};
+// Fase de la reaccion: 'struggle' (forcejeo), 'warn' (aviso antes de actuar)
+// o 'hit' (justo despues de actuar); p = avance 0..1 de la fase.
+function carryReactState(enemy){
+  const def = ENEMY_CARRY_REACTIONS[enemy.sprite] || ENEMY_CARRY_REACTIONS.small;
+  const t = enemy.carryT || 0;
+  const toNext = (enemy.carryNext ?? Infinity) - t;
+  if(def.act && def.warn > 0 && toNext > 0 && toNext <= def.warn) return { phase:'warn', p:1 - toNext / def.warn, t };
+  const since = t - (enemy.carryLast ?? -99);
+  if(since >= 0 && since < 14) return { phase:'hit', p:since / 14, t };
+  return { phase:'struggle', p:0, t };
+}
+function carryShake(t, amp){
+  return (Math.floor(t / 2) % 2 ? 1 : -1) * amp;
+}
+// Pose de cada sprite en brazos del mecha: campos que pisan al enemigo solo
+// para dibujarlo (estado, habilidad, animacion) mas carryDx/carryDy de
+// sacudida. Mira siempre a quien lo carga.
+const ENEMY_CARRY_POSES = {
+  small:(e, r) => ({ state:'carried', carryPose:{ kick:1, flail:1 }, carryDx:carryShake(r.t, 1) }),
+  big:(e, r) => r.phase === 'warn'
+    ? { state:'carried', carryPose:{ kick:0.4, flex:1 }, carryDx:carryShake(r.t, 1 + Math.round(r.p)), flash:Math.floor(r.t / 3) % 2 ? 4 : 0 }
+    : { state:'carried', carryPose:{ kick:0.7 }, carryDx:carryShake(r.t, 1) },
+  thrower:(e, r) => r.phase === 'warn'
+    ? { state:'attack', stateTimer:20, carryPose:{ kick:0.3 } }
+    : { state:'carried', carryPose:{ kick:1 }, carryDx:carryShake(r.t, 1) },
+  scorpion:(e, r) => r.phase === 'hit' && r.p < 0.5
+    ? { state:'attack', stateTimer:10 }
+    : { state:'walk', anim:e.anim * 3, carryDx:r.phase === 'warn' ? carryShake(r.t, 1) : 0 },
+  mummy:(e, r) => r.phase === 'warn'
+    ? { state:'walk', anim:e.anim * 2, abil:'windup' }
+    : r.phase === 'hit'
+      ? { state:'carried', abil:'lash', abilLen:Math.round(16 * Math.sin(r.p * Math.PI)) }
+      : { state:'walk', anim:e.anim * 2, carryDx:carryShake(r.t, 1) },
+  gnome:(e, r) => ({ state:'walk', anim:e.anim * 3, carryDx:carryShake(r.t, 1), flash:r.phase === 'warn' && Math.floor(r.t / 3) % 2 ? 3 : 0 }),
+  mower:(e, r) => r.phase === 'warn'
+    ? { state:'carried', abil:'rev' }
+    : r.phase === 'hit'
+      ? { state:'carried', abil:'dash', carryDx:carryShake(r.t, 1) }
+      : { state:'carried', carryDx:Math.floor(r.t / 10) % 2 ? carryShake(r.t, 1) : 0 },
+  drone:(e, r) => r.phase === 'warn'
+    ? { carryDy:-Math.round(1 + r.p * 2 + Math.abs(Math.sin(r.t * 0.8))), carryDx:carryShake(r.t, 1) }
+    : { carryDx:carryShake(r.t, 1) },
+  ninja:(e, r) => r.phase === 'warn'
+    ? { state:'carried', abil:'fade', abilT:Math.max(1, Math.round(16 * (1 - r.p))) }
+    : { state:'walk', anim:e.anim * 2, carryDx:carryShake(r.t, 1) },
+  shroom:(e, r) => r.phase === 'warn'
+    ? { state:'carried', abil:'puff', abilT:Math.max(1, Math.round(24 * (1 - r.p))) }
+    : { state:'walk', anim:e.anim * 3, carryDx:carryShake(r.t, 1) },
+  wolf:(e, r) => r.phase === 'warn'
+    ? { state:'attack', stateTimer:Math.floor(r.t / 3) % 2 ? 12 : 20, carryDx:carryShake(r.t, 1) }
+    : { state:'walk', anim:e.anim * 2 },
+  frog:(e, r) => r.phase === 'warn'
+    ? { state:'carried', abil:'', carryDy:1 }
+    : { state:'carried', abil:Math.floor(r.t / 5) % 2 ? 'hop' : '', carryDx:carryShake(r.t, 1) },
+  chameleon:(e, r) => r.phase === 'warn'
+    ? { state:'carried', abil:'tongue_windup', previewReveal:true }
+    : r.phase === 'hit'
+      ? { state:'carried', abil:'tongue', abilLen:Math.round(12 * Math.sin(r.p * Math.PI)), previewReveal:true }
+      : { state:'carried', abil:'', revealT:0, previewReveal:Math.floor(r.t / 4) % 3 !== 0, carryDx:carryShake(r.t, 1) },
+  slime:(e, r) => ({ anim:e.anim * (r.phase === 'warn' ? 6 : 3), carryDx:carryShake(r.t, 1) }),
+  sentinel:(e, r) => r.phase === 'warn'
+    ? { state:'carried', guardDown:Math.floor(r.t / 2) % 2 ? 20 : 0, flash:Math.floor(r.t / 3) % 2 ? 3 : 0, carryDx:carryShake(r.t, 1) }
+    : { state:'walk', anim:e.anim * 2 }
+};
+// Copia para dibujar a un enemigo cargado o recien zafado (carryCounter).
+function carriedEnemyView(enemy, react){
+  const view = Object.assign({}, enemy, { knockedDown:0 });
+  // Los clasicos dibujan la sombra en los pies: en el aire se omite.
+  if(CLASSIC_ENEMY_SPRITES.includes(enemy.sprite)) view.noShadow = true;
+  if(enemy.grabbedBy){
+    const pose = ENEMY_CARRY_POSES[enemy.sprite];
+    Object.assign(view, pose ? pose(enemy, react) : { state:'walk', anim:enemy.anim * 2, carryDx:carryShake(react.t, 1) });
+    return view;
+  }
+  const kind = enemy.carryCounter && enemy.carryCounter.kind;
+  if(kind === 'slam') Object.assign(view, { state:'carried', carryPose:{ flex:1 } });
+  else if(kind === 'drop') Object.assign(view, enemy.sprite === 'wolf' ? { state:'attack', stateTimer:12 } : { state:'carried', carryPose:{ kick:1 } });
+  return view;
+}
+// Efectos encima del enemigo cargado (unidades 1x, pies en ox,oy): gotas de
+// sudor, vena de enojo, chispas, pulso del escudo y el "!" de aviso.
+function drawCarryReactionFx(enemy, react, ox, oy){
+  const def = ENEMY_CARRY_REACTIONS[enemy.sprite] || ENEMY_CARRY_REACTIONS.small;
+  const mx = enemy.facing < 0 ? -1 : 1;
+  const { R, P } = enemyPainter(ox, oy, mx);
+  const t = react.t;
+  const top = -Math.round(enemy.height || 20) - 4;
+  const warn = react.phase === 'warn';
+  if(enemy.sprite === 'small' || enemy.sprite === 'frog' || (enemy.sprite === 'gnome' && !warn)){
+    // Gotas de sudor que saltan de la cabeza.
+    for(let k = 0; k < 2; k++){
+      const cycle = (t + k * 6) % 12;
+      const dx = (k ? 1 : -1) * (5 + Math.round(cycle * 0.6));
+      const dy = top + 5 - Math.round(Math.sin(cycle / 12 * Math.PI) * 4) + Math.round(cycle * 0.3);
+      R(dx, dy, 1, 2, '#9fe8ff');
+      P(dx, dy, '#ffffff');
+    }
+  }
+  if(enemy.sprite === 'big' && warn && Math.floor(t / 4) % 2 === 0){
+    // Vena de enojo.
+    R(3, top - 2, 3, 1, '#ff3030');
+    R(4, top - 3, 1, 3, '#ff3030');
+    R(7, top, 2, 1, '#ff3030');
+    R(8, top - 1, 1, 2, '#ff3030');
+  }
+  if(enemy.sprite === 'sentinel' && warn){
+    // Pulso del escudo que se carga alrededor del cuerpo.
+    const r = 5 + Math.round(react.p * 9);
+    for(let k = 0; k < 16; k++){
+      const a = k / 16 * TAU + t * 0.1;
+      P(Math.round(Math.cos(a) * r), -13 + Math.round(Math.sin(a) * r), k % 2 ? '#ffffff' : '#7ae8ff');
+    }
+  }
+  if(enemy.sprite === 'mower' && react.phase === 'hit'){
+    // Chispas de las cuchillas contra el mecha.
+    for(let k = 0; k < 4; k++){
+      const s = (t * 7 + k * 13) % 9;
+      P(11 + (s % 4), -3 - Math.floor(s / 2), k % 2 ? '#ffffff' : '#ffea00');
+    }
+  }
+  if(enemy.sprite === 'scorpion' && react.phase === 'hit' && react.p < 0.4){
+    // Destello del picotazo.
+    R(6, -15, 5, 1, '#ffffff');
+    R(8, -17, 1, 5, '#ffffff');
+  }
+  if(enemy.sprite === 'drone' && warn){
+    // Estela del tiron hacia arriba.
+    for(let k = 0; k < 3; k++) R(-5 + k * 5, 1 + ((t + k * 2) % 4), 1, 2, '#9fe8ff');
+  }
+  if(enemy.sprite === 'slime'){
+    // Babas que gotean.
+    for(let k = 0; k < 2; k++){
+      const cycle = (t + k * 9) % 18;
+      R(-3 + k * 5, Math.round(cycle * 0.5), 1, 2, enemyColorsFor(enemy).body);
+    }
+  }
+  if(def.act && warn && Math.floor(t / 3) % 4 !== 0){
+    // Aviso "!": lanzarlo ahora evita la reaccion.
+    const ay = top - 9 - Math.floor(t / 4) % 2;
+    const color = react.p > 0.6 && Math.floor(t / 2) % 2 ? '#ff3030' : '#ffea00';
+    R(-1, ay - 1, 4, 5, '#1a0a00');
+    R(0, ay, 2, 3, color);
+    R(-1, ay + 4, 4, 3, '#1a0a00');
+    R(0, ay + 5, 2, 1, color);
+  }
+}
 function drawEnemy(enemy, x, y, scale = 1){
   if(enemy.exploded) return;
+  // En brazos de un mecha (o recien zafado de ellos): pose de su reaccion.
+  if(enemy.grabbedBy || enemy.carryCounter){
+    const react = carryReactState(enemy);
+    const view = carriedEnemyView(enemy, react);
+    const cx = x + (view.carryDx || 0) * scale;
+    const cy = y + (view.carryDy || 0) * scale;
+    drawEnemyBody(view, cx, cy, scale);
+    if(enemy.grabbedBy) withSpriteScale(Math.floor(cx), Math.floor(cy), scale, () => drawCarryReactionFx(view, react, Math.floor(cx), Math.floor(cy)));
+    return;
+  }
+  drawEnemyBody(enemy, x, y, scale);
+}
+function drawEnemyBody(enemy, x, y, scale){
   if(!CLASSIC_ENEMY_SPRITES.includes(enemy.sprite) && ENEMY_DRAWERS[enemy.sprite]){
     drawBestiaryEnemy(enemy, x, y, scale);
     return;
@@ -10085,12 +10964,14 @@ function classicHead(R, P, pal, hx, hy, w, h, big){
   P(hx + w - 1, hy + Math.round(h * 0.55), pal.dk);
 }
 function drawClassicSmallHD(R, P, L, pal, pose){
-  const { step, attack, frame } = pose;
+  const { step, attack, frame, armsUp } = pose;
   R(-6 - step, -8, 4, 7, pal.lo);
   R(-8 - step, -2, 6, 2, pal.dk);
   P(-3 - step, -1, pal.claws);
-  R(-5, -19, 3, 6, pal.lo);
-  P(-5, -13, pal.claws);
+  if(!armsUp){
+    R(-5, -19, 3, 6, pal.lo);
+    P(-5, -13, pal.claws);
+  }
   R(1 + step, -9, 4, 8, pal.body);
   R(1 + step, -9, 4, 1, pal.hi);
   R(0 + step, -2, 7, 2, pal.body);
@@ -10109,6 +10990,7 @@ function drawClassicSmallHD(R, P, L, pal, pose){
   P(-10, -18, pal.dk);
   P(-9, -16, pal.dk);
   classicHead(R, P, pal, -8, -36, 18, 12, false);
+  if(armsUp) return;
   if(attack){
     const reach = frame <= 10 ? 7 : 2;
     L(5, -19, 7 + reach, -24, pal.body, 3);
@@ -10121,11 +11003,13 @@ function drawClassicSmallHD(R, P, L, pal, pose){
   }
 }
 function drawClassicBigHD(R, P, L, pal, pose){
-  const { step, attack, frame } = pose;
+  const { step, attack, frame, armsUp } = pose;
   R(-10 - step, -13, 7, 12, pal.lo);
   R(-12 - step, -2, 9, 2, pal.dk);
-  R(-17, -30, 6, 10, pal.lo);
-  R(-18, -21, 8, 7, pal.dk);
+  if(!armsUp){
+    R(-17, -30, 6, 10, pal.lo);
+    R(-18, -21, 8, 7, pal.dk);
+  }
   // Torso macizo con puas en el lomo.
   for(let k = -12; k <= 8; k += 5){
     R(k, -41, 3, 3, pal.spikes);
@@ -10148,6 +11032,7 @@ function drawClassicBigHD(R, P, L, pal, pose){
   P(10 + step, -1, pal.claws);
   P(11 + step, -2, pal.claws);
   classicHead(R, P, pal, 1, -51, 20, 14, true);
+  if(armsUp) return;
   if(attack){
     const reach = frame <= 12 ? 12 : 3;
     R(10, -34, 7, 7, pal.body);
@@ -10259,24 +11144,38 @@ function drawClassicEnemyHD(enemy, x, y){
     ctx.rect(0, 0, W, oy + 3);
     ctx.clip();
   }
+  // Cargado por un mecha (vista de carriedEnemyView): kick = pataleo,
+  // flail = brazos agitados, flex = brazos arriba con los puños cerrados.
+  const carry = enemy.carryPose || null;
+  const armsUp = !!(carry && (carry.flail || carry.flex));
   const pose = {
-    step:walking ? Math.round(Math.sin(enemy.anim * 0.25) * 2) : 0,
+    step:carry ? Math.round(Math.sin(enemy.anim * 0.9) * 2 * (carry.kick || 0)) : (walking ? Math.round(Math.sin(enemy.anim * 0.25) * 2) : 0),
     attack:enemy.state === 'attack',
-    frame:enemy.stateTimer || 0
+    frame:enemy.stateTimer || 0,
+    armsUp
   };
   const drawBody = palette => {
     const { R, P, L } = paint;
     if(enemy.sprite === 'big') drawClassicBigHD(R, P, L, palette, pose);
     else if(enemy.sprite === 'thrower') drawClassicThrowerHD(R, P, L, palette, pose);
     else drawClassicSmallHD(R, P, L, palette, pose);
-    if(celebrate){
-      // Festejo: brazos arriba que se agitan.
-      const wave = Math.round(Math.sin(enemy.anim * 0.35 + (enemy.celebratePhase || 0)) * 2);
+    if(celebrate || armsUp){
+      // Festejo (o forcejeo en brazos de un mecha): brazos arriba que se agitan.
+      const flex = !!(carry && carry.flex);
+      const speed = carry ? (flex ? 0 : 0.8) : 0.35;
+      const wave = Math.round(Math.sin(enemy.anim * speed + (enemy.celebratePhase || 0)) * (carry ? 3 : 2));
       const top = -height - 4;
       R(-width / 2 - 2, top + wave, 3, 12, palette.body);
       R(width / 2 - 1, top - wave, 3, 12, palette.body);
-      P(-width / 2 - 1, top - 1 + wave, '#ffffff');
-      P(width / 2, top - 1 - wave, '#ffffff');
+      if(flex){
+        R(-width / 2 - 3, top - 3, 5, 4, palette.body);
+        R(-width / 2 - 3, top - 3, 5, 1, palette.hi);
+        R(width / 2 - 2, top - 3, 5, 4, palette.body);
+        R(width / 2 - 2, top - 3, 5, 1, palette.hi);
+      } else {
+        P(-width / 2 - 1, top - 1 + wave, '#ffffff');
+        P(width / 2, top - 1 - wave, '#ffffff');
+      }
     }
   };
   drawBody(pal);
@@ -13419,25 +14318,541 @@ function drawDecorCanopy(layer, gy){
     });
   });
 }
+// Camino del rio por filas (0 = desembocadura en la orilla lejana): baja en
+// S desde su nacimiento, cada vez mas ancho y con curvas mas abiertas por la
+// perspectiva. Lo comparten la montaña (prado del valle) y el agua del rio.
+function waterRiverRows(xx, top, rx, riverLen, s, seed){
+  const rows = [];
+  if(riverLen <= 0) return rows;
+  const mouth = xx + Math.round((hash01(seed + 5) - 0.5) * rx * 0.8);
+  const bend = hash01(seed + 6) < 0.5 ? -1 : 1;
+  const amp = Math.max(4, rx * 0.22);
+  let prev = mouth;
+  for(let k = 0; k < riverLen; k++){
+    const q = k / riverLen;
+    const w = Math.max(0, Math.round((1 - q) * 3 * s));
+    const cx = mouth + Math.round(bend * amp * (Math.sin(q * Math.PI * 2.2) * (1 - q * 0.65) + q * 0.6));
+    const left = Math.min(prev, cx) - w;
+    rows.push({ q, y:top - 1 - k, cx, left, span:Math.max(prev, cx) + w - left + 1 });
+    prev = cx;
+  }
+  return rows;
+}
+// Macizo de tres picos donde nace el rio (el principal sobre el manantial).
+// Cada cono guarda sus pendientes y su arista, y la silueta sirve para
+// sembrar el bosque solo sobre la montaña.
+function waterMountainCones(xx, gy, top, H, rows, s, seed){
+  const src = rows.length ? rows[rows.length - 1] : { cx:xx, y:top - 1 };
+  const peakX = src.cx + Math.round((hash01(seed + 61) - 0.5) * 18 * s);
+  const mainH = H + (gy - top);
+  const side = hash01(seed + 62) < 0.5 ? -1 : 1;
+  const cone = (x, h, salt) => ({
+    x:Math.round(x), y:gy - Math.round(h), h:Math.round(h), seed:seed + salt,
+    slopeL:1.05 + hash01(seed + salt + 1) * 0.4,
+    slopeR:1.05 + hash01(seed + salt + 2) * 0.4,
+    ridge:hash01(seed + salt + 3) < 0.5 ? -0.12 : 0.18
+  });
+  return [
+    cone(peakX + side * H * (0.62 + hash01(seed + 63) * 0.18), mainH * (0.5 + hash01(seed + 64) * 0.12), 100),
+    cone(peakX - side * H * (0.55 + hash01(seed + 65) * 0.2), mainH * (0.62 + hash01(seed + 66) * 0.12), 200),
+    cone(peakX, mainH, 300)
+  ];
+}
+function waterConeSpan(cone, y){
+  const d = y - cone.y;
+  const jag = salt => Math.round((hash01(cone.seed + y * 7 + salt) - 0.5) * 2.2) - (d > 3 && d % 9 === 0 ? 1 : 0);
+  return {
+    left:Math.round(cone.x - d * cone.slopeL) + jag(11),
+    right:Math.round(cone.x + d * cone.slopeR) - jag(29),
+    ridge:Math.round(cone.x + d * cone.ridge + Math.sin(d * 0.42 + cone.seed) * 1.4)
+  };
+}
+// Techo de la montaña en la columna x (Infinity = fuera de la silueta).
+function waterMountainTopAt(cones, x){
+  let best = Infinity;
+  for(const cone of cones){
+    const dx = x - cone.x;
+    const d = dx < 0 ? -dx / cone.slopeL : dx / cone.slopeR;
+    if(d <= cone.h) best = Math.min(best, cone.y + d);
+  }
+  return best;
+}
+// Tonos de la montaña del rio (luz desde la izquierda, como el resto).
+function waterMountainTones(c){
+  const dark = shadeHex(c.rock, 0.66);
+  return {
+    hi:mechaMix(c.rock, '#ffffff', 0.24),
+    lit:c.rock,
+    litLo:mechaMix(c.rock, dark, 0.5),
+    dark,
+    darkLo:shadeHex(c.rock, 0.54),
+    crack:shadeHex(c.rock, 0.44),
+    snow:c.snow,
+    snowMid:mechaMix(c.snow, c.rock, 0.3),
+    snowShade:mechaMix(c.snow, dark, 0.45)
+  };
+}
+// Un pico: caras iluminada/en sombra partidas en facetas por espolones que
+// bajan de la cumbre (brillo a un lado, canaleta en sombra al otro), vetas y
+// grietas, y nieve que baja mas por los espolones.
+function drawWaterCone(cone, gy, t, s){
+  const spurs = [];
+  const spurCount = cone.h > 48 * s ? 3 : 2;
+  // Cada espolon nace y muere a distinta altura (no son rayas parejas).
+  const spur = (side, k, salt) => ({
+    side, k, seed:cone.seed + salt,
+    d0:Math.round(cone.h * (0.03 + hash01(cone.seed + salt + 1) * 0.28)),
+    d1:Math.round(cone.h * (0.5 + hash01(cone.seed + salt + 2) * 0.5))
+  });
+  for(let i = 0; i < spurCount; i++){
+    const f = 0.28 + (i + hash01(cone.seed + 40 + i) * 0.7) / spurCount * 0.62;
+    spurs.push(spur(-1, -cone.slopeL * f, 50 + i * 7));
+    spurs.push(spur(1, cone.slopeR * f * (0.7 + hash01(cone.seed + 70 + i) * 0.3), 90 + i * 7));
+  }
+  const spurX = (sp, d) => Math.round(cone.x + d * sp.k + Math.sin(d * 0.35 + sp.seed) * 1.2 + Math.sin(d * 0.11 + sp.seed * 3) * 2);
+  const spurLive = (sp, d) => d >= sp.d0 && d <= sp.d1;
+  const baseDepth = Math.round(cone.h * (0.15 + hash01(cone.seed + 5) * 0.06));
+  const snowy = cone.h >= 34 * s;
+  // Todo relativo al pico: el sprite sale igual donde sea que se cree.
+  const snowEdge = x => baseDepth - Math.abs(x - cone.x) * 0.2
+    + Math.sin((x - cone.x) * 0.9 + cone.seed) * 1.2 + Math.sin((x - cone.x) * 0.31 + cone.seed * 2) * 1.8;
+  for(let y = cone.y; y < gy; y++){
+    const d = y - cone.y;
+    const span = waterConeSpan(cone, y);
+    if(span.right < span.left) continue;
+    const ridge = clamp(span.ridge, span.left, span.right + 1);
+    rect(span.left, y, ridge - span.left, 1, t.lit);
+    rect(ridge, y, span.right - ridge + 1, 1, t.dark);
+    // Facetas: cada espolon brilla de un lado y deja canaleta del otro.
+    if(d > 2){
+      for(const sp of spurs){
+        if(!spurLive(sp, d)) continue;
+        const x = spurX(sp, d);
+        if(x <= span.left + 1 || x >= span.right - 1) continue;
+        if(sp.side < 0 && x < ridge - 1){
+          px(x - 1, y, t.hi);
+          rect(x, y, Math.min(2, ridge - x), 1, t.litLo);
+        } else if(sp.side > 0 && x > ridge + 1){
+          px(x, y, t.litLo);
+          rect(x + 1, y, Math.min(2, span.right - x), 1, t.darkLo);
+        }
+      }
+    }
+    // Arista principal con luz y borde iluminado de la silueta.
+    if(d < cone.h * 0.7 && ridge - 1 > span.left) px(ridge - 1, y, t.hi);
+    px(span.left, y, t.hi);
+    // Vetas (cara al sol) y grietas (sombra), sembradas por fila.
+    if(d > 3){
+      const h1 = hash01(cone.seed + d * 13);
+      if(h1 > 0.45 && ridge - span.left > 7){
+        const vx = span.left + 2 + Math.floor(hash01(cone.seed + d * 7) * (ridge - span.left - 6));
+        rect(vx, y, 2 + Math.round(h1 * 2), 1, t.litLo);
+        px(vx - 1, y + 1, t.litLo);
+      }
+      const h2 = hash01(cone.seed + d * 19);
+      if(h2 > 0.4 && span.right - ridge > 5){
+        const gx = ridge + 2 + Math.floor(hash01(cone.seed + d * 5) * (span.right - ridge - 4));
+        px(gx, y, t.crack);
+        if(h2 > 0.7) px(gx + 1, y + 1, t.crack);
+      }
+    }
+    // Nieve: capa de la cumbre de borde irregular y lenguas por los espolones.
+    if(snowy && d < baseDepth * 2.2 + 4){
+      let runStart = null;
+      let runTone = null;
+      for(let x = span.left; x <= span.right + 1; x++){
+        let tone = null;
+        if(x <= span.right){
+          const edge = snowEdge(x);
+          const onSpur = spurs.some(sp => spurLive(sp, d) && Math.abs(x - spurX(sp, d)) <= (d < baseDepth * 1.6 ? 1 : 0));
+          if(d < edge - 1 || (onSpur && d < baseDepth * 2.1)) tone = x < ridge ? t.snow : t.snowShade;
+          else if(d < edge) tone = t.snowMid;
+        }
+        if(tone !== runTone){
+          if(runTone && x > runStart) rect(runStart, y, x - runStart, 1, runTone);
+          runStart = x;
+          runTone = tone;
+        }
+      }
+    }
+  }
+}
+// Montaña del rio: macizo de tres picos detallados, una canaleta de nieve
+// que baja de la cumbre hasta el glaciar con la cueva del manantial (de ahi
+// sale el rio), bosque de pinos escalonado al pie y un prado que acompaña al
+// rio hasta el lago (el rio pasa por un claro del bosque).
+function drawWaterMountain(c, xx, gy, top, rows, cones, s, seed){
+  const t = waterMountainTones(c);
+  cones.forEach(cone => drawWaterCone(cone, gy, t, s));
+  if(rows.length){
+    const src = rows[rows.length - 1];
+    const main = cones[cones.length - 1];
+    // Canaleta de nieve: de la capa de la cumbre al glaciar, cada vez mas angosta.
+    const tongueY = src.y - Math.round(6 * s);
+    const startY = Math.min(tongueY - 2, main.y + Math.round(main.h * 0.16));
+    const startX = Math.round(src.cx + (main.x - src.cx) * 0.45);
+    for(let y = startY; y < tongueY; y++){
+      const k = (y - startY) / Math.max(1, tongueY - startY);
+      const x = Math.round(startX + (src.cx - startX) * k + Math.sin(y * 0.5 + seed) * 0.8);
+      const w = Math.max(1, Math.round((2.6 - k) * s));
+      rect(x - w, y, w, 1, t.snow);
+      rect(x, y, w, 1, t.snowShade);
+    }
+    // Lengua del glaciar con su cueva de hielo al pie.
+    const gw = Math.max(3, Math.round(5 * s));
+    for(let r = 0; r < Math.max(3, Math.round(4 * s)); r++){
+      const hw = Math.max(1, gw - Math.abs(r - 1));
+      rect(src.cx - hw, tongueY + r - 1, hw, 1, t.snow);
+      rect(src.cx, tongueY + r - 1, hw + 1, 1, t.snowShade);
+    }
+    rect(src.cx - gw, tongueY + Math.round(3 * s) - 1, gw * 2 + 1, 1, t.snowMid);
+    rect(src.cx - 1, tongueY + 1, 3, 2, mechaMix(c.deep, '#000000', 0.35));
+    px(src.cx, tongueY + 1, c.shallow);
+    // Rocas sueltas a los lados del cauce alto.
+    rows.forEach((row, k) => {
+      if(row.q < 0.55 || k % 3) return;
+      const sideX = hash01(seed + k * 5) < 0.5 ? row.left - 2 : row.left + row.span + 1;
+      px(sideX, row.y, t.crack);
+    });
+  }
+  // Bosque al pie: filas de pinos escalonadas (las de atras mas chicas),
+  // solo sobre la silueta y con un claro por donde baja el rio.
+  const pineDark = shadeHex(c.pine, 0.66);
+  const pineTip = mechaMix(c.pine, '#d8f0c8', 0.28);
+  const meadowAt = new Map();
+  rows.forEach(row => {
+    if(row.q < 0.78) meadowAt.set(row.y, { cx:row.left + row.span / 2, half:row.span / 2 + Math.round((1 - row.q) * 7 * s) + 3 });
+  });
+  let minX = Infinity, maxX = -Infinity;
+  cones.forEach(cone => {
+    minX = Math.min(minX, cone.x - cone.h * cone.slopeL);
+    maxX = Math.max(maxX, cone.x + cone.h * cone.slopeR);
+  });
+  const step = Math.max(2, Math.round(3 * s));
+  for(let tier = 3; tier >= 0; tier--){
+    const rowY = gy - 2 - Math.round(tier * 4 * s);
+    for(let x = Math.round(minX) + 2; x <= maxX - 2; x += step){
+      const rel = x - xx;
+      const tx = x + Math.round((hash01(seed + rel * 7 + tier * 131) - 0.5) * 2);
+      const ty = rowY - Math.round(hash01(seed + rel * 11 + tier * 17) * 3 * s);
+      const th = Math.max(4, Math.round((6 + hash01(seed + rel * 3 + tier) * 3 - tier * 0.6) * s));
+      if(ty - th < waterMountainTopAt(cones, tx) - 2) continue;
+      const meadow = meadowAt.get(ty);
+      if(meadow && Math.abs(tx - meadow.cx) < meadow.half + 1) continue;
+      pixelTriangle(tx, ty - th, th, Math.max(1, Math.round(th * 0.32)), c.pine, pineDark);
+      px(tx, ty - th, pineTip);
+    }
+  }
+  // Prado del valle: franja de pasto que acompaña al rio en su tramo bajo.
+  const meadowColor = mechaMix(c.edge, '#c9d97a', 0.32);
+  rows.forEach((row, k) => {
+    if(row.q >= 0.78) return;
+    const extra = Math.round((1 - row.q) * 7 * s) + 3;
+    const jagL = Math.round(hash01(seed + k * 23) * 2);
+    const jagR = Math.round(hash01(seed + k * 29) * 2);
+    rect(row.left - extra - jagL, row.y, row.span + extra * 2 + jagL + jagR, 1, meadowColor);
+    px(row.left - extra - jagL, row.y, c.edge);
+    px(row.left + row.span + extra + jagR - 1, row.y, c.edge);
+    if(k % 4 === 1) px(row.left - Math.round(extra / 2), row.y, c.edge);
+  });
+}
+// Orilla habitada: muelle de tablones con postes y farol en la punta, y
+// cabañas de troncos que se alejan hacia el bosque. La barca y el humo se
+// dibujan aparte porque se mueven.
+function waterShoreLayout(xx, top, wh, half, dockLen, cabinCount, s, seed){
+  const side = hash01(seed + 71) < 0.5 ? -1 : 1;
+  const dockRow = clamp(Math.round(wh * 0.6), 1, Math.max(1, wh - 2));
+  const deckY = top + dockRow;
+  const shoreX = Math.round(xx + side * (half[dockRow] + 3));
+  const len = dockLen > 0 ? Math.min(dockLen, Math.round(half[dockRow] * 0.85) + 3) : 0;
+  const endX = shoreX - side * len;
+  const cabins = [];
+  const nearHalf = half[clamp(dockRow, 0, wh - 1)];
+  for(let i = 0; i < cabinCount; i++){
+    const cs = s * (1 - i * 0.14);
+    const cw = Math.max(8, Math.round((13 + hash01(seed + 80 + i) * 4) * cs));
+    const ch = Math.max(5, Math.round(8 * cs));
+    const roofH = Math.max(3, Math.round(6 * cs));
+    const gapX = Math.round((9 + i * 18 + hash01(seed + 90 + i) * 4) * s);
+    const near = Math.round(xx + side * (nearHalf + gapX));
+    const left = side > 0 ? near : near - cw;
+    const baseY = deckY - 1 - Math.round(i * 3 * s);
+    cabins.push({ left, cw, ch, roofH, baseY, cs, chimX:left + Math.round(cw * (side > 0 ? 0.72 : 0.2)) });
+  }
+  return { side, dockRow, deckY, shoreX, endX, len, cabins, groundY:top + wh + 1 };
+}
+function drawWaterShore(c, lay, s){
+  const woodDark = shadeHex(c.wood, 0.62);
+  const roof = mechaMix(c.wood, '#2a1410', 0.55);
+  const roofLight = mechaMix(roof, '#ffffff', 0.12);
+  const meadow = mechaMix(c.edge, '#c9d97a', 0.32);
+  // Cabañas (las lejanas primero): troncos, techo a dos aguas, chimenea,
+  // ventana encendida, puerta y un sendero de arena hasta el muelle.
+  for(let i = lay.cabins.length - 1; i >= 0; i--){
+    const cab = lay.cabins[i];
+    const wallTop = cab.baseY - cab.ch;
+    // Lomita de pasto que baja hasta el horizonte: la cabaña no flota.
+    for(let y = cab.baseY; y < lay.groundY; y++){
+      const grow = (y - cab.baseY) * 2;
+      const x0 = cab.left - 3 - grow;
+      const w = cab.cw + 6 + grow * 2;
+      rect(x0, y, w, 1, meadow);
+      px(x0, y, c.edge);
+      px(x0 + w - 1, y, c.edge);
+      if((y + i) % 2) px(x0 + 2 + ((y * 7 + i * 5) % Math.max(1, w - 4)), y, c.edge);
+    }
+    rect(cab.left, wallTop, cab.cw, cab.ch, c.wood);
+    for(let y = wallTop + 1; y < cab.baseY; y += 2){
+      rect(cab.left, y, cab.cw, 1, woodDark);
+      px(cab.left - 1, y, woodDark);
+      px(cab.left + cab.cw, y, woodDark);
+    }
+    rect(cab.chimX, wallTop - cab.roofH - 1, Math.max(2, Math.round(2 * cab.cs)), cab.roofH, woodDark);
+    for(let r = 0; r < cab.roofH; r++){
+      const halfW = Math.round((cab.cw / 2 + 2) * (r + 1) / cab.roofH);
+      const mid = cab.left + Math.round(cab.cw / 2);
+      rect(mid - halfW, wallTop - cab.roofH + r, halfW, 1, roofLight);
+      rect(mid, wallTop - cab.roofH + r, halfW, 1, roof);
+    }
+    const winW = Math.max(2, Math.round(3 * cab.cs));
+    const winX = cab.left + Math.round(cab.cw * 0.2);
+    const winY = wallTop + Math.max(1, Math.round(cab.ch * 0.28));
+    drawDecorGlow(winX + winW / 2, winY + 1, winW + 2, c.window, 0.2);
+    rect(winX, winY, winW, Math.max(2, winW), c.window);
+    const doorW = Math.max(2, Math.round(3 * cab.cs));
+    const doorX = cab.left + Math.round(cab.cw * 0.62);
+    rect(doorX, cab.baseY - Math.max(3, Math.round(5 * cab.cs)), doorW, Math.max(3, Math.round(5 * cab.cs)), woodDark);
+    if(i === 0 && lay.len > 0){
+      const pathL = Math.min(doorX, lay.shoreX);
+      rect(pathL, cab.baseY, Math.abs(doorX - lay.shoreX) + 1, 1, c.sand);
+    }
+  }
+  if(lay.len <= 0) return;
+  // Muelle: tablones con juntas, canto oscuro y postes que se hunden en el
+  // agua con su reflejo; farol en la punta.
+  const x0 = Math.min(lay.shoreX, lay.endX);
+  const x1 = Math.max(lay.shoreX, lay.endX);
+  for(let x = lay.endX; lay.side > 0 ? x < lay.shoreX : x > lay.shoreX; x += lay.side * 5){
+    rect(x, lay.deckY + 1, 1, 2, woodDark);
+    px(x + 1, lay.deckY + 3, c.shine);
+  }
+  rect(x0, lay.deckY - 1, x1 - x0 + 1, 1, c.wood);
+  rect(x0, lay.deckY, x1 - x0 + 1, 1, woodDark);
+  for(let x = x0 + 1; x < x1; x += 3) px(x, lay.deckY - 1, woodDark);
+  const lampH = Math.max(4, Math.round(6 * s));
+  rect(lay.endX, lay.deckY - 1 - lampH, 1, lampH, woodDark);
+  drawDecorGlow(lay.endX + 0.5, lay.deckY - lampH - 2, 4, c.window, 0.28);
+  rect(lay.endX - (lay.side > 0 ? 0 : 1), lay.deckY - lampH - 3, 2, 2, c.window);
+}
+// Cada celda es un lago apoyado en el horizonte: elipse mas ancha del lado
+// cercano con orilla irregular, anillos de pasto y playa, reflejos que se
+// mueven, juncos en las puntas y (river > 0) el rio que baja serpenteando
+// desde el fondo, angostandose hacia su nacimiento, y desemboca en la orilla
+// lejana. Con mount > 0 el rio nace en SU montaña (misma celda, no se
+// despega al moverse la camara) y con dock/cabins la orilla tiene muelle,
+// barca y cabañas.
 function drawDecorWater(layer, gy){
   const c = layer.colors || {};
   const s = layer.scale ?? 1;
-  const gap = Math.max(12, layer.gap ?? 120);
-  const wh = Math.max(2, Math.round((layer.h ?? 12) * s));
-  const top = gy - wh;
-  forEachDecorCell(layer, gap, 2, (xx, cell, patternCell, seed) => {
-    const segW = gap + 1;
-    rect(xx, top, segW, wh, c.shallow);
-    rect(xx, top + Math.ceil(wh * 0.5), segW, Math.floor(wh * 0.5), c.deep);
-    rect(xx, top, segW, 1, c.edge);
-    for(let row = 2; row < wh - 1; row += 2){
-      const period = 18 + row * 3;
+  const gap = Math.max(12, layer.gap ?? 360);
+  const baseW = Math.max(24, Math.round((layer.w ?? 160) * s));
+  const wh = Math.max(3, Math.round((layer.h ?? 12) * s));
+  const riverLen = Math.max(0, Math.round((layer.river ?? 30) * s));
+  const mountAsked = Math.max(0, Math.round((layer.mount ?? 0) * s));
+  // La montaña siempre supera al rio: el manantial queda en su ladera.
+  const mountH = mountAsked > 0 ? Math.max(mountAsked, riverLen + Math.round(22 * s)) : 0;
+  const dockLen = Math.max(0, Math.round((layer.dock ?? 0) * s));
+  const cabinCount = clamp(Math.round(layer.cabins ?? 0), 0, 3);
+  const animate = layer.fx !== false;
+  const top = gy - wh - 1;
+  const style = decorStyleKey(layer);
+  const lakeReach = Math.round(baseW * 0.7) + 16;
+  const mountReach = mountH > 0 ? Math.round((mountH + wh) * 1.45 + mountH * 0.8 + baseW * 0.4 + 24 * s) : 0;
+  const shoreReach = cabinCount > 0 ? Math.round(baseW * 0.7 + 70 * s) : 0;
+  const reach = Math.max(lakeReach, mountReach, shoreReach);
+  forEachDecorCell(layer, gap, reach, (xx, cell, patternCell, seed) => {
+    const rx = Math.max(12, Math.round(baseW * decorVary(layer, seed + 11, 0.3) / 2));
+    // Media anchura de cada fila del agua (0 = orilla lejana).
+    const half = [];
+    for(let row = 0; row < wh; row++){
+      // Superelipse: puntas redondeadas, mas ancha del lado cercano.
+      const v = ((row + 0.5) / wh) * 2 - 1;
+      const shape = Math.pow(Math.max(0, 1 - Math.pow(Math.abs(v) * (v < 0 ? 1 : 0.8), 2.6)), 1 / 2.6);
+      half.push(Math.max(2, Math.round(rx * shape + (hash01(seed + row * 17) - 0.5) * 3)));
+    }
+    const rowHalf = row => half[clamp(row, 0, wh - 1)] - (row < 0 ? 3 : 0);
+    const rows = waterRiverRows(xx, top, rx, riverLen, s, seed);
+    // Montaña del rio: parte estatica cacheada, detras de todo el lago.
+    if(mountH > 0){
+      const cones = waterMountainCones(xx, gy, top, mountH, rows, s, seed);
+      let minX = Infinity, maxX = -Infinity, minY = gy;
+      cones.forEach(cone => {
+        minX = Math.min(minX, cone.x - cone.h * cone.slopeL);
+        maxX = Math.max(maxX, cone.x + cone.h * cone.slopeR);
+        minY = Math.min(minY, cone.y);
+      });
+      const spriteLeft = xx - Math.floor(minX) + 5;
+      const spriteTop = gy - minY + 6;
+      drawDecorSprite(`${style}|${seed}|mount`, xx, gy, spriteLeft, spriteTop, Math.ceil(maxX) - Math.floor(minX) + 11, spriteTop + 1,
+        () => drawWaterMountain(c, xx, gy, top, rows, cones, s, seed));
+      if(animate) drawWaterMist(c, cones, gy, minX, maxX, seed);
+    }
+    // Orillas: pasto por fuera y playa, con la orilla cercana sobre el suelo.
+    for(let row = -1; row <= wh; row++){
+      const hw = rowHalf(row);
+      rect(xx - hw - 4, top + row, hw * 2 + 9, 1, c.edge);
+    }
+    for(let row = -1; row <= wh; row++){
+      const hw = rowHalf(row);
+      rect(xx - hw - 2, top + row, hw * 2 + 5, 1, c.sand);
+    }
+    // Rio: nace en su montaña (angosto y con bruma) y baja en S, cada vez mas
+    // ancho, hasta cortar la orilla lejana y desembocar en el lago.
+    if(rows.length){
+      const flow = Math.floor(game.time * 0.35);
+      const oldAlpha = ctx.globalAlpha;
+      rows.forEach((row, k) => {
+        ctx.globalAlpha = oldAlpha * (1 - row.q * 0.5);
+        rect(row.left - 2, row.y, row.span + 4, 1, c.edge);
+        if(row.q < 0.6) rect(row.left - 1, row.y, row.span + 2, 1, c.sand);
+        rect(row.left, row.y, row.span, 1, c.shallow);
+        if((k + flow) % 5 === 0) rect(row.left + ((k * 3) % row.span), row.y, 1, 1, c.shine);
+      });
+      const src = rows[rows.length - 1];
+      if(mountH > 0){
+        // Cascadita: el agua sale de la cueva del glaciar y cae al cauce.
+        ctx.globalAlpha = oldAlpha * 0.85;
+        const fallTop = src.y - Math.max(3, Math.round(4 * s));
+        rect(src.cx, fallTop, 1, src.y - fallTop, c.shallow);
+        const fallLen = Math.max(1, src.y - fallTop);
+        px(src.cx, fallTop + (animate ? Math.floor(game.time * 0.2) % fallLen : 0), c.shine);
+        px(src.cx - 1, src.y, c.shine);
+        px(src.cx + 1, src.y, c.shine);
+      } else {
+        // Sin montaña: manantial entre rocas.
+        rect(src.cx - 2, src.y - 1, 5, 2, shadeHex(c.edge, 0.7));
+        rect(src.cx - 1, src.y - 2, 3, 1, shadeHex(c.edge, 0.7));
+      }
+      ctx.globalAlpha = oldAlpha;
+    }
+    // Agua: superficie al fondo, parte honda del lado cercano.
+    const split = Math.round(wh * 0.45);
+    for(let row = 0; row < wh; row++){
+      const hw = half[row];
+      rect(xx - hw, top + row, hw * 2 + 1, 1, row < split ? c.shallow : c.deep);
+    }
+    // Reflejos que corren sobre el agua.
+    for(let row = 1; row < wh - 1; row += 2){
+      const hw = half[row] - 2;
+      if(hw < 3) continue;
+      const period = 16 + row * 3;
       const off = Math.floor(game.time * 0.25 + row * 5 + cell * 7) % period;
-      for(let x = xx + off; x < xx + segW - 3; x += period){
-        rect(x, top + row, 3 + (row % 3), 1, c.shine);
+      for(let x = -hw + off; x < hw - 3; x += period){
+        rect(xx + x, top + row, 3 + (row % 3), 1, c.shine);
       }
     }
+    // Juncos en las dos puntas, sobre la orilla cercana.
+    const reedBase = gy - 1;
+    for(const side of [-1, 1]){
+      const edgeX = xx + side * (half[wh - 1] + 1);
+      for(let j = 0; j < 3; j++){
+        const rh = Math.max(3, Math.round((3 + hash01(seed + side * 7 + j * 13) * 5) * s));
+        const sx = edgeX - side * j * 2;
+        rect(sx, reedBase - rh, 1, rh, c.edge);
+        rect(sx, reedBase - rh - 2, 1, 2, c.reeds);
+      }
+    }
+    // Orilla habitada: muelle y cabañas (cacheados), barca y humo en vivo.
+    if(dockLen > 0 || cabinCount > 0){
+      const lay = waterShoreLayout(xx, top, wh, half, dockLen, cabinCount, s, seed);
+      const reachX = Math.round(rx + 84 * s) + 6;
+      const upY = gy - top + Math.round(36 * s) + 4;
+      drawDecorSprite(`${style}|${seed}|shore`, xx, gy, reachX, upY, reachX * 2 + 1, upY + 2, () => drawWaterShore(c, lay, s));
+      drawWaterShoreLife(c, lay, top, wh, s, seed, animate);
+    }
   });
+}
+// Los sprites grandes del lago (montaña del rio, muelle, cabañas) cuestan
+// ~20 ms la primera vez: se crean al preparar el nivel, durante la intro, y
+// no de golpe cuando el lago entra en pantalla. Recorre la zona del lago con
+// el mismo look del nivel para que las claves del cache coincidan.
+let decorWarmCtx = null;
+function warmStageDecor(){
+  const stage = stageCfg();
+  const scenery = stageSceneryData(stage);
+  const lakes = scenery.layers.filter(layer => layer && layer.type === 'water' && layer.on !== false &&
+    ((Number(layer.mount) || 0) > 0 || (Number(layer.dock) || 0) > 0 || (Number(layer.cabins) || 0) > 0));
+  if(!lakes.length) return;
+  if(!decorWarmCtx){
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    decorWarmCtx = canvas.getContext('2d');
+  }
+  const look = stageLevelLook(stage, renderLevelIndex());
+  const gy = groundY();
+  const maxCam = decorLevelMaxCam();
+  const oldCtx = ctx;
+  const oldCam = game.cameraX;
+  ctx = decorWarmCtx;
+  try {
+    for(const layer of lakes){
+      if(look && look.hide.has(layer.type)) continue;
+      const target = look ? lookDecorLayer(layer, look) : layer;
+      const step = Math.max(60, W / Math.max(0.05, layer.px ?? 0.5) * 0.8);
+      const from = clamp(Number(layer.zoneStart) || 0, 0, 1) * maxCam;
+      const to = clamp(Number.isFinite(Number(layer.zoneEnd)) ? Number(layer.zoneEnd) : 1, 0, 1) * maxCam;
+      for(let cam = from; cam <= to + step * 0.5; cam += step){
+        game.cameraX = clamp(cam, 0, maxCam);
+        drawDecorLayer(target, gy, layer);
+      }
+    }
+  } finally {
+    ctx = oldCtx;
+    game.cameraX = oldCam;
+  }
+}
+// Nube que cruza la ladera y bruma al pie de la montaña (se mueven).
+function drawWaterMist(c, cones, gy, minX, maxX, seed){
+  const main = cones[cones.length - 1];
+  const oldAlpha = ctx.globalAlpha;
+  const drift = Math.round(Math.sin(game.time * 0.004 + seed) * 5);
+  const cloudY = Math.round(main.y + main.h * 0.3);
+  const cloudX = Math.round(main.x - main.h * 0.3) + drift;
+  const r = Math.max(3, Math.round(main.h * 0.055));
+  ctx.globalAlpha = oldAlpha * 0.4;
+  pixelDisc(cloudX, cloudY, r, c.snow, 0.5);
+  pixelDisc(cloudX + r * 1.4, cloudY + 1, r * 0.8, c.snow, 0.5);
+  pixelDisc(cloudX - r * 1.3, cloudY + 1, r * 0.65, c.snow, 0.5);
+  ctx.globalAlpha = oldAlpha * 0.16;
+  rect(Math.round(minX) + 6, gy - 7, Math.round(maxX - minX) - 12, 3, c.snow);
+  ctx.globalAlpha = oldAlpha;
+}
+// Barca amarrada junto al muelle (se mece) y humo de las chimeneas.
+function drawWaterShoreLife(c, lay, top, wh, s, seed, animate){
+  if(lay.len > 0){
+    const woodDark = shadeHex(c.wood, 0.62);
+    const boatRow = Math.min(wh - 1, lay.dockRow + 2);
+    const bob = animate ? Math.round(Math.sin(game.time * 0.05 + seed) * 0.7) : 0;
+    const bw = Math.max(5, Math.round(8 * s));
+    const bx = lay.side > 0 ? lay.endX + 2 : lay.endX - 2 - bw;
+    const by = top + boatRow + bob;
+    rect(bx, by, bw, 1, c.wood);
+    rect(bx + 1, by + 1, bw - 2, 1, woodDark);
+    px(lay.side > 0 ? bx : bx + bw - 1, by - 1, woodDark);
+  }
+  if(!animate) return;
+  const oldAlpha = ctx.globalAlpha;
+  lay.cabins.forEach((cab, i) => {
+    const baseX = cab.chimX + 1;
+    const baseY = cab.baseY - cab.ch - cab.roofH - 2;
+    for(let p = 0; p < 3; p++){
+      const t = (game.time * 0.008 + p / 3 + hash01(seed + i * 9)) % 1;
+      ctx.globalAlpha = oldAlpha * (1 - t) * 0.55;
+      pixelDisc(baseX + Math.sin(t * 5 + p) * 2 + t * 6, baseY - t * 18 * s, 1 + t * 2.5 * s, c.snow);
+    }
+  });
+  ctx.globalAlpha = oldAlpha;
 }
 function drawDecorTorch(x, y, color, animate){
   const flick = animate ? Math.round(Math.sin(game.time * 0.3 + x) * 1) : 0;
@@ -14172,6 +15587,7 @@ function drawWorld(){
         ctx.textAlign = 'center';
         ctx.fillText(`${Math.ceil(data.repairTimer / 60)}S`, sx, sy - 24);
         ctx.textAlign = 'left';
+        if(data.sosTimer > 0) drawSosFlare(sx, sy, data);
       } else if(data.repairState === 'destroyed'){
         ctx.fillStyle = '#ff4040';
         ctx.font = '9px "Press Start 2P"';
@@ -14195,6 +15611,45 @@ function drawWorld(){
 
   drawParticles();
   drawBossAirFx();
+}
+// Bengala SOS de un mecha caido (boton de AYUDA del celular o su tecla de
+// golpe): estela que sube, estallido rojo y un globo "¡AYUDA!" que parpadea
+// con el color del jugador para que un aliado vaya a repararlo.
+function drawSosFlare(sx, sy, data){
+  const age = SOS_FLARE_FRAMES - data.sosTimer;
+  const rise = clamp(age / 24, 0, 1);
+  const top = sy - 38 - Math.round(rise * 42);
+  for(let y = sy - 36; y > top; y -= 4){
+    ctx.globalAlpha = clamp(0.25 + (sy - 36 - y) / 60, 0.25, 0.85);
+    rect(sx - 1, y, 2, 3, '#ff9a3a');
+  }
+  ctx.globalAlpha = 1;
+  if(rise >= 1){
+    const burst = age - 24;
+    const r = Math.min(10, 3 + burst * 0.5);
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#ff3b2e';
+    ctx.beginPath();
+    ctx.arc(sx, top, r + 4, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    for(let k = 0; k < 8; k++){
+      const a = k * TAU / 8 + burst * 0.05;
+      rect(sx + Math.cos(a) * r - 1, top + Math.sin(a) * r - 1, 2, 2, '#ffd23a');
+    }
+    rect(sx - 2, top - 2, 4, 4, Math.floor(game.time / 4) % 2 === 0 ? '#fff4c0' : '#ff4b3a');
+  }
+  const pulse = Math.floor(game.time / 8) % 2 === 0;
+  const label = '¡AYUDA!';
+  ctx.font = '8px "Press Start 2P"';
+  ctx.textAlign = 'center';
+  const w = Math.ceil(ctx.measureText(label).width) + 8;
+  const by = sy - 48;
+  rect(sx - w / 2 - 1, by - 1, w + 2, 14, '#000');
+  rect(sx - w / 2, by, w, 12, pulse ? slotColor(data.pIdx) : '#ffffff');
+  ctx.fillStyle = pulse ? '#000000' : '#d8202c';
+  ctx.fillText(label, sx, by + 10);
+  ctx.textAlign = 'left';
 }
 function drawBar(x, y, w, h, value, max, color1, color2){
   const ratio = max <= 0 ? 0 : clamp(value / max, 0, 1);
@@ -14648,11 +16103,11 @@ function drawMechaSpecialFx(x, y, char, dir, fx, age, t){
       for(let k = 0; k < 3; k++){
         const r = Math.max(2, (1 - c) * 24 + k * 6);
         alpha(0.25 + c * 0.5 - k * 0.12);
-        specialRing(R, -2, -25, r, r * 0.85, k === 0 ? '#ffffff' : color);
+        specialRing(R, MECHA_CORE.x, MECHA_CORE.y, r, r * 0.85, k === 0 ? '#ffffff' : color);
       }
       alpha(0.35 + c * 0.4);
-      D(-2, -25, 2 + Math.round(c * 4), color);
-      D(-2, -25, 1 + Math.round(c * 2), '#ffffff');
+      D(MECHA_CORE.x, MECHA_CORE.y, 2 + Math.round(c * 4), color);
+      D(MECHA_CORE.x, MECHA_CORE.y, 1 + Math.round(c * 2), '#ffffff');
     } else {
       // Palmas encendidas y ondas que salen al frente.
       alpha(0.8 * (1 - out));
@@ -15106,6 +16561,7 @@ function applyConfigToLiveGame(preserveMIDI = true){
   CONFIG.physics.specialMeterMax = clamp(CONFIG.physics.specialMeterMax ?? 100, 1, 1000);
   CONFIG.physics.specialDamageDecay = clamp(CONFIG.physics.specialDamageDecay ?? 0.5, 0, 1);
   CONFIG.physics.specialMaxHits = Math.max(1, Math.round(CONFIG.physics.specialMaxHits ?? 6));
+  CONFIG.physics.carryReactDelay = Math.round(clamp(Number(CONFIG.physics.carryReactDelay) || 45, 16, 240));
   CONFIG.players.forEach((player, idx) => {
     player.sizeScale = playerScaleForChar(player);
     sanitizeMechaLook(player, idx);
@@ -15447,7 +16903,7 @@ function renderGeneralTab(root){
   }
   root.appendChild(startupSection);
 }
-// Vista previa del mecha en su tarjeta (perfil y frente, con el pase HD).
+// Vista previa del mecha en su tarjeta (3/4 del juego y frente, con el pase HD).
 // Se redibuja con cualquier cambio de la tarjeta: colores, pelaje, orejas.
 function appendMechaPreview(card, idx){
   const canvasEl = document.createElement('canvas');
@@ -15509,6 +16965,9 @@ function renderPlayersTab(root){
     colorRow(card, 'Pecho y hocico', player, 'belly');
     selectRow(card, 'Orejas', MECHA_EARS, player.ears, pick('ears'));
     selectRow(card, 'Efecto del especial', MECHA_FX, player.fx, pick('fx'));
+    // Operador de la cabina del celular (auto = segun el nombre).
+    selectRow(card, 'Operador (personalidad)', OPERATOR_PERSONA_OPTIONS, player.operator, pick('operator'));
+    selectRow(card, 'Genero del operador', OPERATOR_GENDERS, player.pilotGender, pick('pilotGender'));
     grid.appendChild(card);
   });
   section.appendChild(grid);
@@ -15524,6 +16983,7 @@ function renderPhysicsTab(root){
   numberRow(section, 'Hitstop frames', CONFIG.physics, 'hitstopFrames', 1);
   numberRow(section, 'Attack range', CONFIG.physics, 'attackRange', 1);
   numberRow(section, 'Grab range', CONFIG.physics, 'grabRange', 1);
+  rangeRow(section, 'Carry react delay (frames)', CONFIG.physics, 'carryReactDelay', 16, 240, 1);
   numberRow(section, 'Shield HP', CONFIG.physics, 'shieldHp', 1);
   numberRow(section, 'Shield regen frames', CONFIG.physics, 'shieldRegenFrames', 1);
   rangeRow(section, 'Enemy knock mul', CONFIG.physics, 'enemyKnockTimeMul', 0.5, 2, 0.05);
@@ -18639,6 +20099,28 @@ const ENEMY_ABILITY_INFO = {
   split:'Al reventar se divide en dos mas chicos (de noche, dos veces).',
   shield:'Escudo frontal que bloquea golpes ligeros y disparos. Flanquealo o rompe su guardia con golpe fuerte, especial, patada en picada o lanzandole algo.'
 };
+// Reaccion de cada sprite cuando un mecha lo carga (CARRY_ACTIONS del juego).
+const ENEMY_CARRY_INFO = {
+  small:'Al cargarlo patalea desesperado (no hace daño).',
+  big:'Al cargarlo se enfurece, se suelta de un tiron y cae golpeando al mecha.',
+  thrower:'Al cargarlo apunta el cañon y dispara a quemarropa.',
+  scorpion:'Al cargarlo picotea con el aguijon una y otra vez.',
+  mummy:'Al cargarlo envuelve al mecha en vendas y lo frena.',
+  gnome:'Al cargarlo, del susto, enciende la mecha: lanzalo antes de que explote.',
+  mower:'Al cargarlo las cuchillas raspan al mecha.',
+  drone:'Al cargarlo acelera los rotores y se escapa volando.',
+  ninja:'Al cargarlo suelta una bomba de humo, reaparece a tu espalda y corta.',
+  shroom:'Al cargarlo se infla y suelta su nube de veneno encima.',
+  wolf:'Al cargarlo muerde y se suelta.',
+  frog:'Al cargarlo se escurre de las manos y salta lejos.',
+  chameleon:'Al cargarlo parpadea su camuflaje y con la lengua roba energia del especial.',
+  slime:'Al cargarlo gotea acido que deja un charco pegajoso.',
+  sentinel:'Al cargarlo carga el escudo y suelta un pulso que empuja al mecha.'
+};
+// Ciclo de la vista previa: camina, habilidad (70-130), ataque (130-180) y
+// cargado por un mecha (180-250: forcejeo, "!" y accion a los 44 cuadros).
+const ENEMY_PREVIEW_CYCLE = 250;
+const ENEMY_PREVIEW_CARRY_AT = 180;
 // Poses de la vista previa: cada monstruo muestra su habilidad en bucle.
 const ENEMY_PREVIEW_POSES = {
   scorpion: t => t < 30 ? { abil:'under' } : { abil:'warn', abilT:60 - t },
@@ -18655,8 +20137,8 @@ const ENEMY_PREVIEW_POSES = {
 };
 function makePreviewEnemy(typeKey){
   const cfg = CONFIG.enemies[typeKey] || {};
-  const t = enemyPreviewTime % 180;
-  const attacking = t > 130;
+  const t = enemyPreviewTime % ENEMY_PREVIEW_CYCLE;
+  const attacking = t > 130 && t < ENEMY_PREVIEW_CARRY_AT;
   const enemy = {
     id: 1,
     eType: typeKey,
@@ -18684,6 +20166,19 @@ function makePreviewEnemy(typeKey){
   if(cfg.ability === 'hover') enemy.y = 14;
   const pose = ENEMY_PREVIEW_POSES[enemy.sprite];
   if(pose && t > 70 && t <= 130) Object.assign(enemy, pose(t - 70, enemy));
+  if(t >= ENEMY_PREVIEW_CARRY_AT){
+    // En brazos de un mecha: forcejeo, aviso y accion de su reaccion.
+    const ct = t - ENEMY_PREVIEW_CARRY_AT;
+    const act = 44;
+    const react = ENEMY_CARRY_REACTIONS[enemy.sprite] || ENEMY_CARRY_REACTIONS.small;
+    Object.assign(enemy, {
+      grabbedBy:1,
+      y:8,
+      carryT:ct,
+      carryNext:ct < act ? act : (react.every > 0 ? act + react.every : Infinity),
+      carryLast:ct >= act ? act : -99
+    });
+  }
   return enemy;
 }
 function renderEnemyPreviewFrame(item){
@@ -18753,7 +20248,7 @@ function enemyColorValue(typeKey, colorKey){
 function renderEnemiesTab(root){
   enemyPreviewItems = [];
   const section = makeSection('Enemies');
-  noteRow(section, 'Cada enemigo tiene su preview animada y pintable: manten pulsado y arrastra el lapiz sobre el sprite para pintar cada parte (cuerpo, ojos, garras...). Click derecho = cuentagotas. El thrower muestra su proyectil al atacar.');
+  noteRow(section, 'Cada enemigo tiene su preview animada y pintable: manten pulsado y arrastra el lapiz sobre el sprite para pintar cada parte (cuerpo, ojos, garras...). Click derecho = cuentagotas. El thrower muestra su proyectil al atacar. Al final del ciclo cada uno aparece cargado por un mecha con su reaccion: antes de actuar avisa con un "!" (lanzarlo a tiempo la evita); el tiempo de espera se ajusta en PHYSICS > Carry react delay.');
   const paintUI = appendPaintControls(section);
   const paintStatus = paintUI.status;
   const grid = document.createElement('div');
@@ -18780,6 +20275,8 @@ function renderEnemiesTab(root){
       const when = beasts && beasts.noche === key ? 'NOCHE (nivel 3)' : 'TARDE y NOCHE (niveles 2 y 3)';
       noteRow(card, `${worldTpl ? worldTpl.label : 'MUNDO'} · aparece en ${when}. ${ENEMY_ABILITY_INFO[data.ability]}`);
     }
+    const carryInfo = ENEMY_CARRY_INFO[resolveEnemySprite(data.sprite || key)];
+    if(carryInfo) noteRow(card, carryInfo);
 
     const previewCanvas = document.createElement('canvas');
     previewCanvas.width = ENEMY_PREVIEW_W;
@@ -19078,9 +20575,6 @@ function renderRemoteTab(root){
   if(REMOTE_STATE.roomUrl) noteRow(section, `Panel QR: ${REMOTE_STATE.roomUrl}`);
   REMOTE_STATE.joinUrls.forEach((url, idx) => {
     if(url) noteRow(section, `${slotLabel(idx)} URL: ${url}`);
-  });
-  REMOTE_STATE.streamUrls.forEach((url, idx) => {
-    if(url) noteRow(section, `${slotLabel(idx)} VIDEO URL: ${url}`);
   });
 
   const reconnect = document.createElement('button');

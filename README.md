@@ -18,17 +18,26 @@ El proyecto conserva tres rutas compatibles:
 | Perfil | Imagen | Control | Transporte |
 | --- | --- | --- | --- |
 | Local | Pantalla del anfitrion | Teclado o MIDI | Sin red |
-| Telefono LAN | Pantalla del anfitrion; estado en el telefono | Joystick y botones tactiles | WebSocket local, puerto 8765 |
-| Telefono online | Estado o video del juego en el telefono | Los mismos controles tactiles | WSS para control y WebRTC para video/audio |
+| Telefono LAN | Pantalla del anfitrion; cabina del operador en el telefono | Joystick y botones tactiles | WebSocket local, puerto 8765 |
+| Telefono online | Cabina del operador; video del juego opcional (boton VIDEO) | Los mismos controles tactiles | WSS para control y WebRTC para video/audio |
 
 En ambos perfiles de telefono el juego del anfitrion sigue siendo la autoridad: el relay solo autentica sesiones, asigna slots, reenvia entradas y coordina WebRTC.
 
 ### Mando del telefono
 
-- La pantalla principal del mando es el **juego**: el video (o un mini estado del piloto si no hay video) y, sin taparlo, la palanca y los botones STRIKE/SYSTEM.
+- **Compuertas del hangar**: mientras no hay enlace o el anfitrion no empieza, la pantalla central muestra unas compuertas blindadas selladas con tu placa (P1-P4) y el estado ("SIN ENLACE", "ESPERANDO INICIO"). Al empezar la seleccion se destraban y se abren sobre el **escaner**, donde junto a tu mecha aparece su operador de cuerpo completo (mas grande o mas pequeño segun el tamaño del mecha, con su pose caracteristica; salta de gusto al confirmar). Al empezar la partida se cierran y se vuelven a abrir sobre la cabina.
+- La pantalla central del mando es la **cabina del operador**: el gato que pilota tu mecha, en pixel art, visto desde la camara del tablero. Tiene el pelaje, los ojos y los colores de tu personaje y una personalidad propia (ver [docs/OPERADORES.md](docs/OPERADORES.md)). Sin taparla quedan la palanca y los botones STRIKE/SYSTEM.
+  - **Pilotando**: mueve sus palancas con tu palanca y aprieta el gatillo con STRIKE; su cara cambia con la vida del mecha (100-67 % fresco, 66-34 % con curitas y averias, 33-1 % agotado, jadeando y con un ojo medio cerrado).
+  - **Si no tocas el mando 5 segundos** se desespera, llama tu atencion (saluda, golpea el vidrio...), se distrae (cubo Rubik, D&D en solitario, videojuegos, te...) y termina dormido; cada personalidad lo hace a su manera.
+  - **Daño y curacion**: con cada golpe la cabina tiembla y se tiñe de naranja; al curarse brilla de verde. El gran boton del tablero brilla cuando el especial esta listo.
+  - **Mecha caido**: el operador queda KO y luego pide rescate con un cartel. STRIKE y SYSTEM pasan a ser **¡AYUDA!/SOS**: lanzan una bengala sobre tu mecha en la pantalla grande para que un compañero te repare antes de que acabe la cuenta.
+  - **Mecha destruido**: el operador sale eyectado en paracaidas (nube de humo caricaturesca, sin violencia) y la cabina queda vacia.
+  - En salas online, el boton **VIDEO** (junto a ESTADO, tambien en **ESTADO > Centro**) cambia el centro entre la cabina y el video del juego. Siempre empieza apagado, aunque el enlace o la sala pidan video; el boton de sonido aparece sobre el video.
+  - `mobile-controller.html?demo` abre la cabina sin juego, con un panel de prueba en ESTADO para ver a los 12 operadores en cada situacion.
+- La personalidad y el genero de cada operador se eligen en el editor (**PLAYERS > Operador**); en `Auto` se usan los de su nombre (MEFISTECH, BEYLISZETA, BURTRON, ERISPRIME y los gatos del elenco).
 - **Formato**: `AUTO` sigue la orientacion del telefono; `VERTICAL` pone el video arriba y el mando abajo; `HORIZONTAL` muestra el juego completo al centro con la palanca en el borde izquierdo y los botones en el derecho. Si el navegador no permite bloquear la orientacion, el mando se gira solo para sostener el telefono de lado. La eleccion se recuerda en el telefono.
-- **ESTADO** despliega desde arriba un menu con pilotos, nivel, video encendido/apagado, formato, barras del mecha, jefe, avisos y ayuda. Se cierra con `Cerrar` o tocando fuera; un punto rojo avisa si tu mecha cayo.
-- Al salir del navegador el video se pausa para ahorrar datos y se reanuda al volver (salvo en salas de solo video).
+- **ESTADO** despliega desde arriba un menu con pilotos, nivel, centro (cabina o video), formato, barras del mecha, jefe, avisos y ayuda. Se cierra con `Cerrar` o tocando fuera; un punto rojo avisa si tu mecha cayo.
+- Al salir del navegador el video se corta para ahorrar datos y, si estaba encendido, se reanuda al volver.
 
 ## Archivos principales
 
@@ -123,11 +132,13 @@ En la pestana **DECOR** la seccion **Mundos** crea un nivel nuevo desde una plan
 - A la derecha, las capas: visibilidad, orden, agregar elementos por categoria y sus parametros. Cada capa tiene opacidad, desplazamiento vertical, densidad, dispersion y una **zona** del nivel: con `ZONA DESDE AQUI` / `ZONA HASTA AQUI` un lago, una cabana o un templo aparece solo en ese tramo.
 - Atajos: `P`/`M` pintar-navegar, `B`/`I` pincel-gotero, `[` `]` grosor, flechas para recorrer (`Shift` = una pantalla), `R` reproducir, `T` objetivo, `H` resaltar, `L` carriles, `Ctrl+Z` deshacer, `Esc` cerrar.
 
-El catalogo de elementos incluye nubes, aves, niebla, luciernagas, estrellas fugaces, planetas, pinos, arboles, palmeras, helechos, arbustos, penascos, hierba, lianas, dosel, lagos, cascadas, templos, cabanas, lanzaderas, modulos de estacion, cupulas, radares, tuberias y suelos de pradera, selva y metal, ademas de los elementos clasicos de desierto y ciudad.
+El catalogo de elementos incluye nubes, aves, niebla, luciernagas, estrellas fugaces, planetas, pinos, arboles, palmeras, helechos, arbustos, penascos, hierba, lianas, dosel, lagos (con su montaña nevada, rio, muelle y cabañas), cascadas, templos, cabanas, lanzaderas, modulos de estacion, cupulas, radares, tuberias y suelos de pradera, selva y metal, ademas de los elementos clasicos de desierto y ciudad.
 
 Se incluyen tres mundos nuevos (agregados una sola vez al pool, junto con un set propio):
 
-- **BOSQUE BRUMOSO**: atardecer frio entre pinos azulados y niebla; lago en el primer tercio, cabana del guardabosques cerca del final y luciernagas en la segunda mitad.
+- **BOSQUE BRUMOSO**: atardecer frio entre pinos azulados y niebla; en el primer tercio, un lago al pie de su propia montaña nevada (el rio nace en el glaciar y baja por un prado), con muelle, farol, barca y cabañas en la orilla; cabana del guardabosques cerca del final y luciernagas en la segunda mitad.
+
+La capa **LAGO / RIO** lleva su entorno en la misma celda, asi el rio nunca se despega de su montaña con el parallax: `Montaña del rio` (alto, 0 = sin montaña), `Muelle` (largo, 0 = sin muelle) y `Cabañas en la orilla` (0-3), con colores propios para montaña, nieve, pinos, madera y ventanas (las ventanas y el farol siguen encendidos de noche).
 - **TEMPLO ESMERALDA**: jungla humeda con dosel, lianas, loros, cascadas y un templo escalonado con antorchas que emerge en la segunda mitad.
 - **BASE LUNAR NYX-7**: base de noche eterna frente a un gigante gaseoso anillado, con lanzaderas, modulos, radares, cupulas y tuberias; es la arena final del Bake-Neko.
 
@@ -155,7 +166,7 @@ Controladores mediante el servicio de sesiones:
 .\start_mecha_online_service.bat
 ```
 
-El servicio escucha en `0.0.0.0:8787`. El lanzador usa `py -3.11`, `python` o la instalacion local de Python 3.11 (en ese orden), detecta la IPv4 LAN del PC y la anuncia como base de los QR cuando no existe `MECHA_PUBLIC_URL`; deja la ventana abierta mientras juegas. `127.0.0.1` solo sirve desde el mismo PC: si ejecutas Uvicorn manualmente, usa la IP LAN (por ejemplo `http://192.168.x.x:8787`) en `serviceHttpUrl` o define `MECHA_PUBLIC_URL` con esa IP. En el editor de configuracion selecciona el transporte online y conecta el anfitrion. La sala entrega cuatro enlaces de estado y cuatro enlaces de juego transmitido.
+El servicio escucha en `0.0.0.0:8787`. El lanzador usa `py -3.11`, `python` o la instalacion local de Python 3.11 (en ese orden), detecta la IPv4 LAN del PC y la anuncia como base de los QR cuando no existe `MECHA_PUBLIC_URL`; deja la ventana abierta mientras juegas. `127.0.0.1` solo sirve desde el mismo PC: si ejecutas Uvicorn manualmente, usa la IP LAN (por ejemplo `http://192.168.x.x:8787`) en `serviceHttpUrl` o define `MECHA_PUBLIC_URL` con esa IP. En el editor de configuracion selecciona el transporte online y conecta el anfitrion. La sala entrega un QR y un enlace por piloto; el video del juego empieza apagado en todos los mandos y cada jugador lo enciende con el boton VIDEO, junto a ESTADO.
 
 Si el celular muestra `ERR_CONNECTION_REFUSED`, revisa primero que el enlace no contenga `127.0.0.1`/`localhost`, que el lanzador siga abierto y que el puerto TCP `8787` este permitido en la red privada de Windows. Si el firewall lo bloquea, abre PowerShell/CMD como administrador y ejecuta: `netsh advfirewall firewall add rule name="MechaKatz Online Service 8787 (Private)" dir=in action=allow protocol=TCP localport=8787 profile=private`. Es una regla local acotada al puerto y perfil privado; no la agregues en redes publicas.
 
@@ -165,7 +176,7 @@ La ejecucion publica (fuera de la misma Wi-Fi) requiere un dominio HTTPS, proxy 
 
 El estado de las salas vive en memoria. Ejecuta una sola instancia y un solo worker. Antes de escalar horizontalmente hay que mover sesiones y coordinacion a un almacen compartido.
 
-STUN puede bastar en redes sencillas, pero no atraviesa todas las combinaciones de NAT o firewall. El perfil `Control + estado` funciona enteramente sobre WSS; para afirmar que `Juego transmitido + control` funciona entre redes arbitrarias se debe configurar TURN y probar desde datos celulares.
+STUN puede bastar en redes sencillas, pero no atraviesa todas las combinaciones de NAT o firewall. El control y la cabina funcionan enteramente sobre WSS; para afirmar que el video del juego (boton VIDEO) funciona entre redes arbitrarias se debe configurar TURN y probar desde datos celulares.
 
 Consulta [online_service/README.md](online_service/README.md) para el despliegue y las variables.
 
@@ -178,10 +189,11 @@ py -3.11 -m uvicorn online_service.app:app --host 127.0.0.1 --port 8787
 py -3.11 .\tests\live_relay_smoke.py http://127.0.0.1:8787
 ```
 
-`tests/test_client_contracts.js` valida sintaxis y contratos compartidos de juego, movil, editor generado y JSON:
+`tests/test_client_contracts.js` valida sintaxis y contratos compartidos de juego, movil, editor generado y JSON. `tests/test_cockpit_operators.js` ejecuta el motor de la cabina del celular en Node y dibuja a los 12 operadores en cada modo, evento, tramo de vida y paso de espera:
 
 ```powershell
 node .\tests\test_client_contracts.js
+node .\tests\test_cockpit_operators.js
 ```
 
 ## Licencia
